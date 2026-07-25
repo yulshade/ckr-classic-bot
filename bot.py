@@ -74,14 +74,20 @@ BOOST_CHOICES = [
 
 def get_detection_stage_names(group_name):
     stage_names = []
+    # For non-in-game groups, always stages have higher priority
+    if group_name != "IN_GAME":
+        for stage_name in DETECTION_ALWAYS_STAGES:
+            if stage_name not in stage_names:
+                stage_names.append(stage_name)
     # Add stages from the specified detection group
     for stage_name in DETECTION_GROUPS[group_name]:
         if stage_name not in stage_names:
             stage_names.append(stage_name)
-    # Add stages that should always be detected
-    for stage_name in DETECTION_ALWAYS_STAGES:
-        if stage_name not in stage_names:
-            stage_names.append(stage_name)
+    # For in-game, always stages are appended last (original behavior)
+    if group_name == "IN_GAME":
+        for stage_name in DETECTION_ALWAYS_STAGES:
+            if stage_name not in stage_names:
+                stage_names.append(stage_name)
     return stage_names
 
 
