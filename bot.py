@@ -276,7 +276,8 @@ def main():
             elif stage == "OVERTAKE_BREAK_SCORE":
                 print("🏆 Detected Stage: OVERTAKE_BREAK_SCORE")
                 accept_overtake_break_score()
-                detection_group = "PRE_GAME"
+                detection_group = "POST_GAME"
+                last_stage = None
             elif stage == "TOO_MANY_TREASURES":
                 print("💎 Detected Stage: TOO_MANY_TREASURES")
                 accept_too_many_treasures()
