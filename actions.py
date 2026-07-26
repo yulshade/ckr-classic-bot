@@ -59,7 +59,7 @@ from config import (
     START_BUTTON,
     CONNECTION_LOST_RELOAD_BUTTON,
 )
-from detection import detect_templates, detect_anti_bot_odd_cards
+from detection import detect_templates, detect_anti_bot_odd_cards, detect_stage
 from config import (
     ANTI_BOT_CARD_POS_1, ANTI_BOT_CARD_POS_2, ANTI_BOT_CARD_POS_3,
     ANTI_BOT_CARD_POS_4, ANTI_BOT_CARD_POS_5, ANTI_BOT_CARD_POS_6,
@@ -354,6 +354,10 @@ def close_announcement_dialog():
         print(f"🖱️ Tapping close announcement dialog button {i+1}/5")
         safe_device_tap(DEVICE_IP, DEVICE_PORT, CLOSE_ANNOUNCEMENT_DIALOG_BUTTON[0], CLOSE_ANNOUNCEMENT_DIALOG_BUTTON[1])
         time.sleep(random.uniform(0.8, 1.4))
+    time.sleep(random.uniform(0.8, 1.4))
+    device_screen = device_capture_screen(DEVICE_IP, DEVICE_PORT)
+    if detect_stage(device_screen, ["PARTY_RUN"]) == "PARTY_RUN":
+        close_party_run_mode()
 
 
 def close_party_run_mode():

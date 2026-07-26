@@ -17,7 +17,6 @@ from actions import (
     accept_relic_claim,
     accept_too_many_treasures,
     close_announcement_dialog,
-    close_party_run_mode,
     complete_finish,
     handle_anti_bot,
     handle_inactive,
@@ -315,12 +314,6 @@ def main():
                 print("💤 Detected Stage: INACTIVE")
                 handle_inactive()
                 last_stage = None
-            elif stage == "PARTY_RUN":
-                print("🎉 Detected Stage: PARTY_RUN")
-                close_party_run_mode()
-                detection_group = "PRE_GAME"
-                last_stage = None
-
             time.sleep(0.25)
     except KeyboardInterrupt:
         print("🛑 Bot stopped by user.")
