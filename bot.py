@@ -180,6 +180,7 @@ def main():
                 if elapsed >= session_reset_interval:
                     print(f"🔄 Session reset triggered after {elapsed / 3600:.2f}h — restarting app...")
                     device_reset_app(DEVICE_IP, DEVICE_PORT)
+                    time.sleep(5)
                     close_announcement_dialog()
                     pending_send_friend_life = True
                     session_start_time = time.time()
@@ -302,6 +303,7 @@ def main():
             elif stage == "CONNECTION_LOST":
                 print("🔌 Detected Stage: CONNECTION_LOST")
                 device_reset_app(DEVICE_IP, DEVICE_PORT)
+                time.sleep(5)
                 close_announcement_dialog()
                 session_start_time = time.time()
                 session_reset_interval = random.uniform(*SESSION_RESET_INTERVAL)
