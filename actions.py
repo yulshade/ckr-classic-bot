@@ -28,6 +28,7 @@ from config import (
     COOKIE_RELAY_USE_BUTTON,
     DEVICE_IP,
     DEVICE_PORT,
+    EXIT_GAME_SETTINGS_BUTTON,
     EXIT_PARTY_RUN_MODE_BUTTON,
     FAST_START_ITEM,
     FAST_START_USE_BUTTON,
@@ -358,6 +359,8 @@ def close_announcement_dialog():
     device_screen = device_capture_screen(DEVICE_IP, DEVICE_PORT)
     if detect_stage(device_screen, ["PARTY_RUN"]) == "PARTY_RUN":
         close_party_run_mode()
+    elif detect_stage(device_screen, ["GAME_SETTINGS"]) == "GAME_SETTINGS":
+        close_game_settings()
 
 
 def close_party_run_mode():
@@ -365,3 +368,8 @@ def close_party_run_mode():
     safe_device_tap(DEVICE_IP, DEVICE_PORT, EXIT_PARTY_RUN_MODE_BUTTON[0], EXIT_PARTY_RUN_MODE_BUTTON[1])
     time.sleep(random.uniform(0.8, 1.4))
 
+
+def close_game_settings():
+    print("🖱️ Closing Game Settings...")
+    safe_device_tap(DEVICE_IP, DEVICE_PORT, EXIT_GAME_SETTINGS_BUTTON[0], EXIT_GAME_SETTINGS_BUTTON[1])
+    time.sleep(random.uniform(0.8, 1.4))
