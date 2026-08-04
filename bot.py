@@ -71,7 +71,7 @@ BOOST_CHOICES = [
 ]
 
 
-def get_detection_stage_names(group_name):
+def get_detection_stage_names(group_name, exclude=None):
     stage_names = []
     # For non-in-game groups, always stages have higher priority
     if group_name != "IN_GAME":
@@ -87,6 +87,8 @@ def get_detection_stage_names(group_name):
         for stage_name in DETECTION_ALWAYS_STAGES:
             if stage_name not in stage_names:
                 stage_names.append(stage_name)
+    if exclude:
+        stage_names = [s for s in stage_names if s not in exclude]
     return stage_names
 
 
@@ -109,6 +111,7 @@ def prompt_user_options():
                 print(f"  ✅ Selected: {desired_boost_name}")
                 break
             print(f"  ⚠️ Please enter a number between 1 and {len(BOOST_CHOICES)}.")
+    detect_relic = input("🏺 Detect Relic (open + claim)? [y/n]: ").strip().lower() == "y"
     print("---------------------")
 
     return {
@@ -117,6 +120,7 @@ def prompt_user_options():
         "use_desired_random_boost": use_desired_random_boost,
         "desired_boost_template": desired_boost_template,
         "desired_boost_name": desired_boost_name if use_desired_random_boost else None,
+        "detect_relic": detect_relic,
     }
 
 
@@ -137,6 +141,7 @@ def main():
         # save_debug_screen(device_screen)
 
         options = prompt_user_options()
+        relic_exclude = None if options["detect_relic"] else {"RELIC_COMPLETE", "RELIC_CLAIM"}
 
         last_stage = None
         is_first_game = True
@@ -150,10 +155,10 @@ def main():
 
         while True:
             device_screen = device_capture_screen(DEVICE_IP, DEVICE_PORT)
-            stage = detect_stage(device_screen, get_detection_stage_names(detection_group))
+            stage = detect_stage(device_screen, get_detection_stage_names(detection_group, exclude=relic_exclude))
             if stage is None:
                 if time.time() - last_detected_time >= DETECTION_RECOVERY_SCAN_INTERVAL[detection_group]:
-                    stage = detect_stage(device_screen)
+                    stage = detect_stage(device_screen, exclude=relic_exclude)
                     last_detected_time = time.time()
             else:
                 last_detected_time = time.time()

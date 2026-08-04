@@ -101,12 +101,14 @@ def detect_templates(screen, template_files, region=None):
     return matches
 
 
-def detect_stage(screen, stage_names=None):
+def detect_stage(screen, stage_names=None, exclude=None):
     screen_gray = _normalize_gray(screen)
     if screen_gray is None:
         return None
     if stage_names is None:
         stage_names = STAGE_TEMPLATES.keys()
+    if exclude:
+        stage_names = [s for s in stage_names if s not in exclude]
     for stage_name in stage_names:
         template_files = STAGE_TEMPLATES.get(stage_name)
         if not template_files:
