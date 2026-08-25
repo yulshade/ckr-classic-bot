@@ -53,6 +53,11 @@ PAGE = """
     <label><input type="checkbox" name="detect_relic" {% if cfg.detect_relic %}checked{% endif %}> Detect Relic (open + claim)</label>
   </fieldset>
   <fieldset>
+    <legend>Friends &amp; lives</legend>
+    <label><input type="checkbox" name="enable_send_friend_life" {% if cfg.enable_send_friend_life %}checked{% endif %}> Send Friend Life (after each session reset)</label>
+    <label><input type="checkbox" name="enable_quick_receive_send_lives" {% if cfg.enable_quick_receive_send_lives %}checked{% endif %}> Quick Receive/Send Lives (periodic mailbox pass)</label>
+  </fieldset>
+  <fieldset>
     <legend>Device</legend>
     <label>IP: <input type="text" name="device_ip" value="{{ cfg.device_ip }}"></label>
     <label>Port: <input type="number" name="device_port" value="{{ cfg.device_port }}"></label>
@@ -97,6 +102,8 @@ def update():
         desired_boost_name=desired_boost_name,
         desired_boost_template=desired_boost_template,
         detect_relic="detect_relic" in form,
+        enable_send_friend_life="enable_send_friend_life" in form,
+        enable_quick_receive_send_lives="enable_quick_receive_send_lives" in form,
         device_ip=form.get("device_ip", "").strip() or current["device_ip"],
         device_port=device_port,
     )

@@ -125,8 +125,11 @@ def main():
                 print("⏳ Waiting 5 seconds for screen refresh...")
                 time.sleep(5)
                 if pending_send_friend_life:
-                    print("💌 Sending friend lives after app reset...")
-                    handle_send_friend_life()
+                    if options["enable_send_friend_life"]:
+                        print("💌 Sending friend lives after app reset...")
+                        handle_send_friend_life()
+                    else:
+                        print("💌 Send Friend Life disabled — skipping post-reset friend life pass.")
                     pending_send_friend_life = False
                     last_lives_time = time.time()
                     last_stage = None
@@ -148,8 +151,11 @@ def main():
                     continue
                 lives_elapsed = time.time() - last_lives_time
                 if lives_elapsed >= lives_interval:
-                    print(f"💌 ~30 min passed ({lives_elapsed / 60:.1f} min) — receiving and sending lives...")
-                    handle_quick_receive_and_send_lives()
+                    if options["enable_quick_receive_send_lives"]:
+                        print(f"💌 ~30 min passed ({lives_elapsed / 60:.1f} min) — receiving and sending lives...")
+                        handle_quick_receive_and_send_lives()
+                    else:
+                        print(f"💌 ~30 min passed ({lives_elapsed / 60:.1f} min) — Quick Receive/Send Lives disabled, skipping.")
                     last_lives_time = time.time()
                     lives_interval = random.uniform(25 * 60, 35 * 60)
                     last_stage = None

@@ -19,6 +19,8 @@ _state = {
     "desired_boost_name": BOOST_CHOICES[0][0],
     "desired_boost_template": BOOST_CHOICES[0][1],
     "detect_relic": False,
+    "enable_send_friend_life": True,
+    "enable_quick_receive_send_lives": True,
 }
 
 
