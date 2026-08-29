@@ -13,7 +13,7 @@ import os
 import sys
 import threading
 
-from config import BOOST_CHOICES, DEVICE_IP, DEVICE_PORT
+from config import AUTO_JUMP_INTERVAL, BOOST_CHOICES, DEVICE_IP, DEVICE_PORT
 
 _lock = threading.Lock()
 
@@ -29,6 +29,8 @@ _DEFAULTS = {
     "enable_send_friend_life": True,
     "enable_quick_receive_send_lives": True,
     "enable_auto_jump": False,
+    "auto_jump_min_interval": AUTO_JUMP_INTERVAL[0],
+    "auto_jump_max_interval": AUTO_JUMP_INTERVAL[1],
 }
 
 # Fields not persisted to disk: internal state (mirrors bot.py's detection_group,

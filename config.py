@@ -6,7 +6,7 @@ DEVICE_PORT = 7555           # Change to your adb device's port number
 TEMPLATE_DIR = "templates"
 MATCH_THRESHOLD = 0.8
 SESSION_RESET_INTERVAL = (5400, 10800)  # 1.5-3 hours
-AUTO_JUMP_INTERVAL = (0.3, 1.0)  # 300ms-1s between auto-jump taps
+AUTO_JUMP_INTERVAL = (0.3, 1.0)  # seeds runtime_config's auto_jump_min/max_interval; adjustable live via the config UI
 
 # -------------------
 # CONFIG UI

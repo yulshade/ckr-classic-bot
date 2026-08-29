@@ -40,7 +40,6 @@ from config import (
     FRIEND_TOP_LEADERBOARD_TEMPLATE,
     INACTIVE_RELOAD_BUTTON,
     JUMP_BUTTON,
-    AUTO_JUMP_INTERVAL,
     LEADERBOARD_BOTTOM_POSITION,
     LEADERBOARD_TOP_POSITION,
     MAIL_BOX_BUTTON,
@@ -389,6 +388,6 @@ def run_auto_jump():
         options = runtime_config.get()
         if options["enable_auto_jump"] and options["in_game"]:
             safe_device_tap(*get_device(), JUMP_BUTTON[0], JUMP_BUTTON[1])
-            time.sleep(random.uniform(*AUTO_JUMP_INTERVAL))
+            time.sleep(random.uniform(options["auto_jump_min_interval"], options["auto_jump_max_interval"]))
         else:
             time.sleep(0.2)

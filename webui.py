@@ -27,6 +27,30 @@ PAGE = """
   select, input[type=text], input[type=number] { padding: 4px; }
   button { padding: 8px 20px; font-size: 1em; }
   .saved { color: #1a7f37; font-weight: bold; }
+  .dual-slider { position: relative; height: 24px; margin: 0.6em 0 0.2em 1.6em; }
+  .dual-slider .track {
+    position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
+    background: #ddd; border-radius: 2px;
+  }
+  .dual-slider .range-highlight {
+    position: absolute; top: 50%; height: 4px; margin-top: -2px;
+    background: #1a7f37; border-radius: 2px;
+  }
+  .dual-slider input[type=range] {
+    position: absolute; left: 0; top: 0; width: 100%; height: 24px; margin: 0;
+    background: none; pointer-events: none; -webkit-appearance: none; appearance: none;
+  }
+  .dual-slider input[type=range]::-webkit-slider-runnable-track { -webkit-appearance: none; background: transparent; }
+  .dual-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
+    background: #1a7f37; border: 2px solid #fff; box-shadow: 0 0 1px rgba(0,0,0,.5); cursor: pointer;
+  }
+  .dual-slider input[type=range]::-moz-range-track { background: transparent; border: none; }
+  .dual-slider input[type=range]::-moz-range-thumb {
+    pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
+    background: #1a7f37; border: 2px solid #fff; cursor: pointer;
+  }
+  .slider-readout { margin: 0.2em 0 0.3em 1.6em; font-variant-numeric: tabular-nums; color: #444; }
 </style>
 </head>
 <body>
@@ -56,8 +80,20 @@ PAGE = """
     <legend>Gameplay</legend>
     <label>
       <input type="checkbox" name="enable_auto_jump" {% if cfg.enable_auto_jump %}checked{% endif %}>
-      Auto Jump (taps the fixed Jump button, 300ms-1s random interval, while a run is in progress)
+      Auto Jump (taps the fixed Jump button at a random interval while a run is in progress)
     </label>
+    <div class="dual-slider">
+      <div class="track"></div>
+      <div class="range-highlight" id="auto_jump_range_highlight"></div>
+      <input type="range" id="auto_jump_min_slider" name="auto_jump_min_interval" min="0.1" max="5.0" step="0.1"
+             value="{{ cfg.auto_jump_min_interval }}" oninput="syncAutoJumpSlider('min')">
+      <input type="range" id="auto_jump_max_slider" name="auto_jump_max_interval" min="0.1" max="5.0" step="0.1"
+             value="{{ cfg.auto_jump_max_interval }}" oninput="syncAutoJumpSlider('max')">
+    </div>
+    <div class="slider-readout">
+      <output id="auto_jump_min_out">{{ cfg.auto_jump_min_interval }}</output>s &ndash;
+      <output id="auto_jump_max_out">{{ cfg.auto_jump_max_interval }}</output>s between taps
+    </div>
   </fieldset>
   <fieldset>
     <legend>Friends &amp; lives</legend>
@@ -71,6 +107,28 @@ PAGE = """
   </fieldset>
   <button type="submit">Save</button>
 </form>
+<script>
+  function syncAutoJumpSlider(moved) {
+    var minEl = document.getElementById('auto_jump_min_slider');
+    var maxEl = document.getElementById('auto_jump_max_slider');
+    var minVal = parseFloat(minEl.value);
+    var maxVal = parseFloat(maxEl.value);
+    if (minVal > maxVal) {
+      if (moved === 'min') { maxVal = minVal; maxEl.value = maxVal; }
+      else { minVal = maxVal; minEl.value = minVal; }
+    }
+    document.getElementById('auto_jump_min_out').textContent = minEl.value;
+    document.getElementById('auto_jump_max_out').textContent = maxEl.value;
+    var lo = parseFloat(minEl.min);
+    var hi = parseFloat(minEl.max);
+    var leftPct = (minVal - lo) / (hi - lo) * 100;
+    var rightPct = (maxVal - lo) / (hi - lo) * 100;
+    var hl = document.getElementById('auto_jump_range_highlight');
+    hl.style.left = leftPct + '%';
+    hl.style.width = (rightPct - leftPct) + '%';
+  }
+  syncAutoJumpSlider('min');
+</script>
 </body>
 </html>
 """
@@ -102,6 +160,17 @@ def update():
     except ValueError:
         device_port = current["device_port"]
 
+    try:
+        auto_jump_min_interval = float(form.get("auto_jump_min_interval", ""))
+    except ValueError:
+        auto_jump_min_interval = current["auto_jump_min_interval"]
+    try:
+        auto_jump_max_interval = float(form.get("auto_jump_max_interval", ""))
+    except ValueError:
+        auto_jump_max_interval = current["auto_jump_max_interval"]
+    if auto_jump_min_interval > auto_jump_max_interval:
+        auto_jump_min_interval, auto_jump_max_interval = auto_jump_max_interval, auto_jump_min_interval
+
     runtime_config.update(
         use_fast_start="use_fast_start" in form,
         use_cookie_relay="use_cookie_relay" in form,
@@ -110,6 +179,8 @@ def update():
         desired_boost_template=desired_boost_template,
         detect_relic="detect_relic" in form,
         enable_auto_jump="enable_auto_jump" in form,
+        auto_jump_min_interval=auto_jump_min_interval,
+        auto_jump_max_interval=auto_jump_max_interval,
         enable_send_friend_life="enable_send_friend_life" in form,
         enable_quick_receive_send_lives="enable_quick_receive_send_lives" in form,
         device_ip=form.get("device_ip", "").strip() or current["device_ip"],
