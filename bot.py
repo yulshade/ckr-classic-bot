@@ -1,6 +1,8 @@
 import random
 import time
 
+import runtime_config
+import webui
 from adb import device_capture_screen, device_connect, device_reset_app, device_tap
 from actions import (
     accept_congratulations,
@@ -32,43 +34,15 @@ from actions import (
     using_fast_start,
 )
 from config import (
-    BOOST_17P_BASE_SPEED_TEMPLATE,
-    BOOST_15P_SCORE_BONUS_TEMPLATE,
-    BOOST_20P_HP_FROM_POTIONS_TEMPLATE,
-    BOOST_2PIT_LIFTS_TEMPLATE,
-    BOOST_70P_CRUSH_CHANCE_TEMPLATE,
-    BOOST_DOUBLE_COINS_TEMPLATE,
-    BOOST_GOLD_COIN_MAGIC_TEMPLATE,
-    BOOST_M15P_HP_DRAIN_TEMPLATE,
-    BOOST_M30P_COLLISION_DAMAGE_TEMPLATE,
-    BOOST_MAGNETIC_AURA_TEMPLATE,
-    BOOST_REVIVE_ONCE_WITH_80HP_TEMPLATE,
     DETECTION_ALWAYS_STAGES,
     DETECTION_GROUPS,
     DETECTION_RECOVERY_SCAN_INTERVAL,
-    DEVICE_IP,
-    DEVICE_PORT,
     SESSION_RESET_INTERVAL,
+    WEBUI_HOST,
+    WEBUI_PORT,
 )
 from detection import detect_stage, load_templates
 from debug import save_debug_screen
-
-# -------------------
-# BOT OPTIONS
-# -------------------
-BOOST_CHOICES = [
-    ("Double Coins",            BOOST_DOUBLE_COINS_TEMPLATE),
-    ("+15% Score Bonus",        BOOST_15P_SCORE_BONUS_TEMPLATE),
-    ("-15% HP Drain",           BOOST_M15P_HP_DRAIN_TEMPLATE),
-    ("Revive Once with 80 HP",  BOOST_REVIVE_ONCE_WITH_80HP_TEMPLATE),
-    ("70% Crush Chance",        BOOST_70P_CRUSH_CHANCE_TEMPLATE),
-    ("+17% Base Speed",         BOOST_17P_BASE_SPEED_TEMPLATE),
-    ("Gold Coin Magic",         BOOST_GOLD_COIN_MAGIC_TEMPLATE),
-    ("-30% Collision Damage",   BOOST_M30P_COLLISION_DAMAGE_TEMPLATE),
-    ("+20% HP from Potions",    BOOST_20P_HP_FROM_POTIONS_TEMPLATE),
-    ("Magnetic Aura",           BOOST_MAGNETIC_AURA_TEMPLATE),
-    ("2 Pit Lifts",             BOOST_2PIT_LIFTS_TEMPLATE),
-]
 
 
 def get_detection_stage_names(group_name, exclude=None):
@@ -92,38 +66,6 @@ def get_detection_stage_names(group_name, exclude=None):
     return stage_names
 
 
-def prompt_user_options():
-    desired_boost_template = None
-
-    print("⚙️ --- Bot Options ---")
-    use_fast_start = input("⚡ Use Fast Start (buy + use)? [y/n]: ").strip().lower() == "y"
-    use_cookie_relay = input("🍪 Use Cookie Relay (buy + use)? [y/n]: ").strip().lower() == "y"
-    use_desired_random_boost = input("🎲 Use Desired Random Boost (buy + use)? [y/n]: ").strip().lower() == "y"
-    if use_desired_random_boost:
-        print("  Select desired boost (must match the boost option configured in-game):")
-        for i, (name, _) in enumerate(BOOST_CHOICES, 1):
-            print(f"  {i:2}. {name}")
-        while True:
-            choice = input("  Enter number: ").strip()
-            if choice.isdigit() and 1 <= int(choice) <= len(BOOST_CHOICES):
-                desired_boost_template = BOOST_CHOICES[int(choice) - 1][1]
-                desired_boost_name = BOOST_CHOICES[int(choice) - 1][0]
-                print(f"  ✅ Selected: {desired_boost_name}")
-                break
-            print(f"  ⚠️ Please enter a number between 1 and {len(BOOST_CHOICES)}.")
-    detect_relic = input("🏺 Detect Relic (open + claim)? [y/n]: ").strip().lower() == "y"
-    print("---------------------")
-
-    return {
-        "use_fast_start": use_fast_start,
-        "use_cookie_relay": use_cookie_relay,
-        "use_desired_random_boost": use_desired_random_boost,
-        "desired_boost_template": desired_boost_template,
-        "desired_boost_name": desired_boost_name if use_desired_random_boost else None,
-        "detect_relic": detect_relic,
-    }
-
-
 # -------------------
 # MAIN LOOP
 # -------------------
@@ -131,17 +73,18 @@ def main():
     try:
         print("🚀 CookieRun Classic Bot Started")
         print("⚠️ Screen must be 1280x720 resolution for the bot to work properly.")
-        print(f"📱 Connecting to device at {DEVICE_IP}:{DEVICE_PORT}...")
 
-        device_connect(DEVICE_IP, DEVICE_PORT)
+        device_ip, device_port = runtime_config.get_device()
+        print(f"📱 Connecting to device at {device_ip}:{device_port}...")
+        device_connect(device_ip, device_port)
         load_templates()
 
         # * for debugging *
-        # device_screen = device_capture_screen(DEVICE_IP, DEVICE_PORT)
+        # device_screen = device_capture_screen(device_ip, device_port)
         # save_debug_screen(device_screen)
 
-        options = prompt_user_options()
-        relic_exclude = None if options["detect_relic"] else {"RELIC_COMPLETE", "RELIC_CLAIM"}
+        url = webui.start(WEBUI_HOST, WEBUI_PORT)
+        print(f"🖥️ Config UI running at {url} — open it in a browser to change run options anytime, no restart needed.")
 
         last_stage = None
         is_first_game = True
@@ -154,7 +97,14 @@ def main():
         pending_send_friend_life = False
 
         while True:
-            device_screen = device_capture_screen(DEVICE_IP, DEVICE_PORT)
+            options = runtime_config.get()
+            if (options["device_ip"], options["device_port"]) != (device_ip, device_port):
+                device_ip, device_port = options["device_ip"], options["device_port"]
+                print(f"📱 Device target changed — reconnecting to {device_ip}:{device_port}...")
+                device_connect(device_ip, device_port)
+            relic_exclude = None if options["detect_relic"] else {"RELIC_COMPLETE", "RELIC_CLAIM"}
+
+            device_screen = device_capture_screen(device_ip, device_port)
             stage = detect_stage(device_screen, get_detection_stage_names(detection_group, exclude=relic_exclude))
             if stage is None:
                 if time.time() - last_detected_time >= DETECTION_RECOVERY_SCAN_INTERVAL[detection_group]:
@@ -184,7 +134,7 @@ def main():
                 elapsed = time.time() - session_start_time
                 if elapsed >= session_reset_interval:
                     print(f"🔄 Session reset triggered after {elapsed / 3600:.2f}h — restarting app...")
-                    device_reset_app(DEVICE_IP, DEVICE_PORT)
+                    device_reset_app(device_ip, device_port)
                     time.sleep(5)
                     close_announcement_dialog()
                     pending_send_friend_life = True
@@ -209,7 +159,7 @@ def main():
                     last_stage = None
                     continue
                 if not is_first_game:
-                    delay = random.uniform(30, 60)
+                    delay = random.uniform(5, 15)
                     print(f"⏳ Waiting for {delay:.2f} seconds before starting the next game...")
                     time.sleep(delay)
                 is_first_game = False
@@ -307,7 +257,7 @@ def main():
                 last_stage = None
             elif stage == "CONNECTION_LOST":
                 print("🔌 Detected Stage: CONNECTION_LOST")
-                device_reset_app(DEVICE_IP, DEVICE_PORT)
+                device_reset_app(device_ip, device_port)
                 time.sleep(5)
                 close_announcement_dialog()
                 session_start_time = time.time()

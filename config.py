@@ -8,6 +8,12 @@ MATCH_THRESHOLD = 0.8
 SESSION_RESET_INTERVAL = (5400, 10800)  # 1.5-3 hours
 
 # -------------------
+# CONFIG UI
+# -------------------
+WEBUI_HOST = "127.0.0.1"
+WEBUI_PORT = 5000
+
+# -------------------
 # STAGE DETECTION TEMPLATES
 # -------------------
 STAGE_MAINMENU_TEMPLATE = ["MAINMENU_1.png"]
@@ -113,6 +119,22 @@ BOOST_TEMPLATES = (
     BOOST_MAGNETIC_AURA_TEMPLATE,
     BOOST_2PIT_LIFTS_TEMPLATE,
 )
+
+# Display name -> template, in the order offered to the user (config UI dropdown,
+# formerly the prompt_user_options() menu). Must match the boost configured in-game.
+BOOST_CHOICES = [
+    ("Double Coins",            BOOST_DOUBLE_COINS_TEMPLATE),
+    ("+15% Score Bonus",        BOOST_15P_SCORE_BONUS_TEMPLATE),
+    ("-15% HP Drain",           BOOST_M15P_HP_DRAIN_TEMPLATE),
+    ("Revive Once with 80 HP",  BOOST_REVIVE_ONCE_WITH_80HP_TEMPLATE),
+    ("70% Crush Chance",        BOOST_70P_CRUSH_CHANCE_TEMPLATE),
+    ("+17% Base Speed",         BOOST_17P_BASE_SPEED_TEMPLATE),
+    ("Gold Coin Magic",         BOOST_GOLD_COIN_MAGIC_TEMPLATE),
+    ("-30% Collision Damage",   BOOST_M30P_COLLISION_DAMAGE_TEMPLATE),
+    ("+20% HP from Potions",    BOOST_20P_HP_FROM_POTIONS_TEMPLATE),
+    ("Magnetic Aura",           BOOST_MAGNETIC_AURA_TEMPLATE),
+    ("2 Pit Lifts",             BOOST_2PIT_LIFTS_TEMPLATE),
+]
 
 # -------------------
 # STAGE MAP
