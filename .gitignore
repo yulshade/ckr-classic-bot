@@ -177,6 +177,7 @@ pyrightconfig.json
 
 debug_screens/
 .DS_Store
+runtime_config.json
 
 # AI assistant files
 .claude/
