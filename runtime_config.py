@@ -21,6 +21,9 @@ _state = {
     "detect_relic": False,
     "enable_send_friend_life": True,
     "enable_quick_receive_send_lives": True,
+    "enable_auto_jump": False,
+    # internal: mirrors bot.py's detection_group, not user-editable via the UI form
+    "in_game": False,
 }
 
 

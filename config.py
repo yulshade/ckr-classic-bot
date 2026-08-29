@@ -6,6 +6,7 @@ DEVICE_PORT = 7555           # Change to your adb device's port number
 TEMPLATE_DIR = "templates"
 MATCH_THRESHOLD = 0.8
 SESSION_RESET_INTERVAL = (5400, 10800)  # 1.5-3 hours
+AUTO_JUMP_INTERVAL = (0.3, 1.0)  # 300ms-1s between auto-jump taps
 
 # -------------------
 # CONFIG UI
@@ -289,6 +290,7 @@ LEADERBOARD_BOTTOM_POSITION = (435, 620)
 CLOSE_ANNOUNCEMENT_DIALOG_BUTTON = (1127, 66)
 EXIT_PARTY_RUN_MODE_BUTTON = (1214, 89)
 EXIT_GAME_SETTINGS_BUTTON = (1116, 98)
+JUMP_BUTTON = (170, 630)
 
 # -------------------
 # ANTI-BOT CAPTCHA

@@ -1,4 +1,5 @@
 import random
+import threading
 import time
 
 import runtime_config
@@ -29,6 +30,7 @@ from actions import (
     purchase_cookie_relay,
     purchase_desired_random_boost,
     purchase_fast_start,
+    run_auto_jump,
     start_game,
     using_cookie_relay,
     using_fast_start,
@@ -86,6 +88,8 @@ def main():
         url = webui.start(WEBUI_HOST, WEBUI_PORT)
         print(f"🖥️ Config UI running at {url} — open it in a browser to change run options anytime, no restart needed.")
 
+        threading.Thread(target=run_auto_jump, daemon=True).start()
+
         last_stage = None
         is_first_game = True
         detection_group = "PRE_GAME"
@@ -98,6 +102,7 @@ def main():
 
         while True:
             options = runtime_config.get()
+            runtime_config.update(in_game=(detection_group == "IN_GAME"))
             if (options["device_ip"], options["device_port"]) != (device_ip, device_port):
                 device_ip, device_port = options["device_ip"], options["device_port"]
                 print(f"📱 Device target changed — reconnecting to {device_ip}:{device_port}...")

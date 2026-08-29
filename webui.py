@@ -53,6 +53,13 @@ PAGE = """
     <label><input type="checkbox" name="detect_relic" {% if cfg.detect_relic %}checked{% endif %}> Detect Relic (open + claim)</label>
   </fieldset>
   <fieldset>
+    <legend>Gameplay</legend>
+    <label>
+      <input type="checkbox" name="enable_auto_jump" {% if cfg.enable_auto_jump %}checked{% endif %}>
+      Auto Jump (taps the fixed Jump button, 300ms-1s random interval, while a run is in progress)
+    </label>
+  </fieldset>
+  <fieldset>
     <legend>Friends &amp; lives</legend>
     <label><input type="checkbox" name="enable_send_friend_life" {% if cfg.enable_send_friend_life %}checked{% endif %}> Send Friend Life (after each session reset)</label>
     <label><input type="checkbox" name="enable_quick_receive_send_lives" {% if cfg.enable_quick_receive_send_lives %}checked{% endif %}> Quick Receive/Send Lives (periodic mailbox pass)</label>
@@ -102,6 +109,7 @@ def update():
         desired_boost_name=desired_boost_name,
         desired_boost_template=desired_boost_template,
         detect_relic="detect_relic" in form,
+        enable_auto_jump="enable_auto_jump" in form,
         enable_send_friend_life="enable_send_friend_life" in form,
         enable_quick_receive_send_lives="enable_quick_receive_send_lives" in form,
         device_ip=form.get("device_ip", "").strip() or current["device_ip"],

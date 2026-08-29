@@ -1,6 +1,7 @@
 import random
 import time
 
+import runtime_config
 from adb import safe_device_tap, safe_device_scroll, device_capture_screen
 from runtime_config import get_device
 from config import (
@@ -38,6 +39,8 @@ from config import (
     FRIEND_TOP_LEADERBOARD_REGION,
     FRIEND_TOP_LEADERBOARD_TEMPLATE,
     INACTIVE_RELOAD_BUTTON,
+    JUMP_BUTTON,
+    AUTO_JUMP_INTERVAL,
     LEADERBOARD_BOTTOM_POSITION,
     LEADERBOARD_TOP_POSITION,
     MAIL_BOX_BUTTON,
@@ -372,3 +375,20 @@ def close_game_settings():
     print("🖱️ Closing Game Settings...")
     safe_device_tap(*get_device(), EXIT_GAME_SETTINGS_BUTTON[0], EXIT_GAME_SETTINGS_BUTTON[1])
     time.sleep(random.uniform(0.8, 1.4))
+
+
+def run_auto_jump():
+    """Background loop: tap the fixed Jump button while a run is in progress.
+
+    Meant to be started once as a daemon thread. Idles (no taps) whenever the
+    "Auto Jump" option is off or the bot isn't currently in a run, checking
+    runtime_config each cycle so both can change live without a restart.
+    """
+    print("🦘 Auto Jump watcher started.")
+    while True:
+        options = runtime_config.get()
+        if options["enable_auto_jump"] and options["in_game"]:
+            safe_device_tap(*get_device(), JUMP_BUTTON[0], JUMP_BUTTON[1])
+            time.sleep(random.uniform(*AUTO_JUMP_INTERVAL))
+        else:
+            time.sleep(0.2)
