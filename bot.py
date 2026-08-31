@@ -41,6 +41,7 @@ from config import (
     DETECTION_RECOVERY_SCAN_INTERVAL,
     RESUME_STAGE_CHECK_TIMEOUT,
     SESSION_RESET_INTERVAL,
+    UNKNOWN_STAGE_REPORT_DELAY,
     WEBUI_HOST,
     WEBUI_PORT,
 )
@@ -106,6 +107,8 @@ def main():
         is_first_game = True
         detection_group = "PRE_GAME"
         last_detected_time = time.time()
+        last_known_stage_time = time.time()
+        device_unreachable = False
         session_start_time = time.time()
         session_reset_interval = random.uniform(*SESSION_RESET_INTERVAL)
         last_lives_time = time.time()
@@ -125,6 +128,7 @@ def main():
                     last_stage = None
                     print("⏸️ Paused — press Start in the config UI to "
                           + ("resume." if has_run else "begin."))
+                runtime_config.set_stage("Paused" if has_run else "Not started")
                 time.sleep(0.25)
                 continue
             if paused_since is not None:
@@ -141,6 +145,8 @@ def main():
                 resync_pending = True
                 resync_started_time = time.time()
                 last_stage = None
+                last_known_stage_time = time.time()
+                runtime_config.set_stage("Checking the current stage...")
                 print("🔍 Checking the current stage before resuming actions...")
             runtime_config.update(in_game=(not resync_pending and detection_group == "IN_GAME"))
             if (options["device_ip"], options["device_port"]) != (device_ip, device_port):
@@ -149,7 +155,37 @@ def main():
                 device_connect(device_ip, device_port)
             relic_exclude = None if options["detect_relic"] else {"RELIC_COMPLETE", "RELIC_CLAIM"}
 
-            device_screen = device_capture_screen(device_ip, device_port)
+            try:
+                device_screen = device_capture_screen(device_ip, device_port)
+            except Exception as e:
+                device_screen, capture_error = None, e
+            else:
+                capture_error = None if device_screen is not None else "empty screen capture"
+            if device_screen is None:
+                # The device went away (emulator closed, adb dropped, cable
+                # unplugged). Report that instead of crashing out of the loop
+                # or leaving the last detected stage on display forever.
+                if not device_unreachable:
+                    device_unreachable = True
+                    print(f"📵 Lost the device at {device_ip}:{device_port} ({capture_error}) — retrying...")
+                runtime_config.update(in_game=False)
+                runtime_config.set_stage("Device unreachable — reconnecting...")
+                last_stage = None
+                try:
+                    device_connect(device_ip, device_port)
+                except Exception:
+                    pass
+                time.sleep(2)
+                continue
+            if device_unreachable:
+                device_unreachable = False
+                print(f"📶 Device at {device_ip}:{device_port} is back — rechecking the stage...")
+                # The screen almost certainly moved on while it was gone, so
+                # re-derive the detection group the way a resume does.
+                resync_pending = True
+                resync_started_time = time.time()
+                last_known_stage_time = time.time()
+                runtime_config.set_stage("Checking the current stage...")
             if resync_pending:
                 # Full unfiltered scan — the pre-pause detection group can't be
                 # trusted. Keep idling (no actions, no auto jump) until a stage
@@ -161,6 +197,7 @@ def main():
                         # Unknown screen for too long — restart the app to get
                         # back to a known one, then check the stage again.
                         print(f"❓ No stage recognized {resync_elapsed:.0f}s after resuming — restarting app...")
+                        runtime_config.set_stage("Restarting the app...")
                         device_reset_app(device_ip, device_port)
                         time.sleep(5)
                         close_announcement_dialog()
@@ -171,6 +208,7 @@ def main():
                         detection_group = "PRE_GAME"
                         is_first_game = True
                         resync_started_time = time.time()
+                        runtime_config.set_stage("Checking the current stage...")
                         print("🔍 Checking the current stage after the restart...")
                     time.sleep(0.25)
                     continue
@@ -188,6 +226,14 @@ def main():
                 else:
                     last_detected_time = time.time()
 
+            if stage is not None:
+                last_known_stage_time = time.time()
+                runtime_config.set_stage(stage)
+            elif time.time() - last_known_stage_time >= UNKNOWN_STAGE_REPORT_DELAY:
+                # Nothing has matched for a while: the game was closed or
+                # crashed, or it is on a screen there is no template for.
+                runtime_config.set_stage("Unknown screen — searching...")
+
             if stage == last_stage:
                 time.sleep(0.1)
                 continue
@@ -202,6 +248,7 @@ def main():
                 if pending_send_friend_life:
                     if options["enable_send_friend_life"]:
                         print("💌 Sending friend lives after app reset...")
+                        runtime_config.set_stage("Sending friend lives...")
                         handle_send_friend_life()
                     else:
                         print("💌 Send Friend Life disabled — skipping post-reset friend life pass.")
@@ -212,6 +259,7 @@ def main():
                 elapsed = time.time() - session_start_time
                 if elapsed >= session_reset_interval:
                     print(f"🔄 Session reset triggered after {elapsed / 3600:.2f}h — restarting app...")
+                    runtime_config.set_stage("Restarting the app (session reset)...")
                     device_reset_app(device_ip, device_port)
                     time.sleep(5)
                     close_announcement_dialog()
@@ -228,6 +276,7 @@ def main():
                 if lives_elapsed >= lives_interval:
                     if options["enable_quick_receive_send_lives"]:
                         print(f"💌 ~30 min passed ({lives_elapsed / 60:.1f} min) — receiving and sending lives...")
+                        runtime_config.set_stage("Receiving and sending lives...")
                         handle_quick_receive_and_send_lives()
                     else:
                         print(f"💌 ~30 min passed ({lives_elapsed / 60:.1f} min) — Quick Receive/Send Lives disabled, skipping.")
@@ -338,6 +387,7 @@ def main():
                 last_stage = None
             elif stage == "CONNECTION_LOST":
                 print("🔌 Detected Stage: CONNECTION_LOST")
+                runtime_config.set_stage("Restarting the app (connection lost)...")
                 device_reset_app(device_ip, device_port)
                 time.sleep(5)
                 close_announcement_dialog()
@@ -355,5 +405,10 @@ def main():
             time.sleep(0.25)
     except KeyboardInterrupt:
         print("🛑 Bot stopped by user.")
+        runtime_config.update(running=False, in_game=False)
+        runtime_config.set_stage("Stopped")
     except Exception as e:
         print(f"❌ An error occurred: {e}")
+        # The loop is gone, so do not leave the config UI claiming it runs.
+        runtime_config.update(running=False, in_game=False)
+        runtime_config.set_stage(f"Stopped after an error: {e}")

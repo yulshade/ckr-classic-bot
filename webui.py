@@ -2,8 +2,15 @@
 
 Serves a single page (no template files, so nothing extra to bundle for
 PyInstaller) that reads/writes the shared state in runtime_config.py.
+
+The status box at the top polls /status once a second, so what the bot is
+actually doing right now (the stage it last detected, or that it is looking
+for one, restarting the app, or unable to reach the device) stays correct
+without reloading the page -- and goes red if the bot process itself is gone.
 """
+import logging
 import threading
+import time
 
 from flask import Flask, render_template_string, request
 
@@ -12,6 +19,9 @@ from config import BOOST_CHOICES
 
 app = Flask(__name__)
 app.logger.disabled = True
+# The page polls /status every second; without this every poll would print a
+# request line into the bot console and bury the stage log.
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 PAGE = """
 <!doctype html>
@@ -34,6 +44,9 @@ PAGE = """
   .status .state { font-weight: bold; }
   .status.running { background: #e7f6ec; border-color: #1a7f37; color: #14532d; }
   .status.paused { background: #fdf3e3; border-color: #b06d00; color: #7a4a00; }
+  .status.offline { background: #fbeaea; border-color: #b00020; color: #7a0016; }
+  .status.offline form { display: none; }
+  .status .stage { margin-top: 3px; font-size: 0.95em; }
   .status form { margin: 0 0 0 auto; }
   .status button { padding: 6px 18px; }
   .dual-slider { position: relative; height: 24px; margin: 0.6em 0 0.2em 1.6em; }
@@ -64,10 +77,13 @@ PAGE = """
 </head>
 <body>
 <h1>CookieRunBot Config</h1>
-<div class="status {{ 'running' if cfg.running else 'paused' }}">
-  <span>Bot is <span class="state">{{ 'running' if cfg.running else 'paused' }}</span></span>
+<div class="status {{ 'running' if cfg.running else 'paused' }}" id="status">
+  <div>
+    <div>Bot is <span class="state" id="status-state">{{ 'running' if cfg.running else 'paused' }}</span></div>
+    <div class="stage">Stage: <span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed"></span></div>
+  </div>
   <form method="post" action="/control">
-    <button type="submit" name="action" value="{{ 'pause' if cfg.running else 'start' }}">
+    <button type="submit" name="action" id="control-button" value="{{ 'pause' if cfg.running else 'start' }}">
       {{ 'Pause' if cfg.running else 'Start' }}
     </button>
   </form>
@@ -145,6 +161,36 @@ PAGE = """
     hl.style.width = (rightPct - leftPct) + '%';
   }
   syncAutoJumpSlider('min');
+
+  function describeElapsed(seconds) {
+    var s = Math.floor(seconds);
+    if (s < 1) { return ''; }
+    if (s < 60) { return ' (' + s + 's)'; }
+    return ' (' + Math.floor(s / 60) + 'm ' + (s % 60) + 's)';
+  }
+  function applyStatus(status) {
+    document.getElementById('status').className = 'status ' + (status.running ? 'running' : 'paused');
+    document.getElementById('status-state').textContent = status.running ? 'running' : 'paused';
+    document.getElementById('status-stage').textContent = status.stage;
+    document.getElementById('status-elapsed').textContent = describeElapsed(status.stage_seconds);
+    var button = document.getElementById('control-button');
+    button.value = status.running ? 'pause' : 'start';
+    button.textContent = status.running ? 'Pause' : 'Start';
+  }
+  function showOffline() {
+    document.getElementById('status').className = 'status offline';
+    document.getElementById('status-state').textContent = 'not responding';
+    document.getElementById('status-stage').textContent = 'the bot is not running';
+    document.getElementById('status-elapsed').textContent = '';
+  }
+  function pollStatus() {
+    fetch('/status', { cache: 'no-store' })
+      .then(function (response) { return response.json(); })
+      .then(applyStatus)
+      .catch(showOffline);
+  }
+  pollStatus();
+  setInterval(pollStatus, 1000);
 </script>
 </body>
 </html>
@@ -204,6 +250,17 @@ def update():
         device_port=device_port,
     )
     return _render(saved=True)
+
+
+@app.route("/status", methods=["GET"])
+def status():
+    """Live bot state for the status box, polled by the page every second."""
+    cfg = runtime_config.get()
+    return {
+        "running": cfg["running"],
+        "stage": cfg["stage"],
+        "stage_seconds": max(0.0, time.time() - cfg["stage_since"]),
+    }
 
 
 @app.route("/control", methods=["POST"])

@@ -251,6 +251,11 @@ DETECTION_RECOVERY_SCAN_INTERVAL = {
 # the bot gives up and restarts the app to get back to a known screen.
 RESUME_STAGE_CHECK_TIMEOUT = 90.0  # seconds
 
+# How long detection has to keep coming up empty before the config UI reports
+# the stage as unknown. Short gaps are normal (screen transitions, dialogs
+# animating in), so this keeps the readout from flickering on every tap.
+UNKNOWN_STAGE_REPORT_DELAY = 3.0  # seconds
+
 # -------------------
 # ITEM COORDINATES
 # -------------------

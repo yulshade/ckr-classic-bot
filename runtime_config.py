@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import threading
+import time
 
 from config import AUTO_JUMP_INTERVAL, BOOST_CHOICES, DEVICE_IP, DEVICE_PORT
 
@@ -35,11 +36,12 @@ _DEFAULTS = {
 }
 
 # Fields not persisted to disk: internal state (in_game mirrors bot.py's
-# detection_group, not user-editable via the UI form), the start/pause flag
+# detection_group and stage/stage_since describe what the loop is doing right
+# now, none of them user-editable via the UI form), the start/pause flag
 # (the app always launches paused, waiting for Start in the web UI) and
 # desired_boost_template (derived from desired_boost_name via
 # config.BOOST_CHOICES on load, since it isn't JSON-safe).
-_NON_PERSISTED_FIELDS = {"running", "in_game", "desired_boost_template"}
+_NON_PERSISTED_FIELDS = {"running", "in_game", "stage", "stage_since", "desired_boost_template"}
 
 _base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 PERSIST_PATH = os.path.join(_base_dir, "runtime_config.json")
@@ -70,6 +72,8 @@ _state = _load_persisted()
 _state["in_game"] = False
 # Always start paused, regardless of anything left in the persisted file.
 _state["running"] = False
+_state["stage"] = "Not started"
+_state["stage_since"] = time.time()
 
 
 def _save_persisted():
@@ -92,6 +96,20 @@ def get_device():
     """Return (device_ip, device_port) for the current call to adb."""
     with _lock:
         return _state["device_ip"], _state["device_port"]
+
+
+def set_stage(stage):
+    """Record what the bot loop is doing right now, for display in the web UI.
+
+    Called from bot.py on every loop iteration, so the timestamp is only
+    refreshed when the text actually changes — the UI shows how long the bot
+    has been on this stage, which is the tell that it is stuck rather than
+    progressing.
+    """
+    with _lock:
+        if _state["stage"] != stage:
+            _state["stage"] = stage
+            _state["stage_since"] = time.time()
 
 
 def update(**kwargs):
