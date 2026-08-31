@@ -38,6 +38,10 @@ PAGE = """
   :root { color-scheme: light; }
   body {
     font-family: system-ui, sans-serif; color: #222; background: #fff;
+    /* Nothing declared a leading, so every block ran on the browser's ~1.2 --
+       too tight for the status box, whose stage line wraps a whole exception
+       message when the bot dies. One leading, set once, inherited. */
+    line-height: 1.5;
     max-width: 520px; margin: 0 auto; padding: 24px 16px 40px;
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
@@ -52,6 +56,11 @@ PAGE = """
     border: 1px solid #ccc; border-radius: 6px;
   }
   legend { padding: 0 4px; color: #444; font-weight: 600; }
+  /* Machine output: the stage, how long the bot has been on it, the device
+     Start will drive, the interval values. Body size, because this is what the
+     page is opened to read, and tabular figures so the elapsed counter does not
+     shuffle sideways while it reticks once a second. */
+  .readout { font-variant-numeric: tabular-nums; }
   label { display: block; margin: 0.5em 0; }
   select, input[type=text], input[type=number] {
     font: inherit; font-size: 16px;  /* 16px, or iOS Safari zooms the page on focus */
@@ -76,14 +85,17 @@ PAGE = """
     display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px;
     padding: 12px 14px; margin-bottom: 1.2em; border-radius: 6px; border: 1px solid;
   }
-  .status .state { font-weight: bold; }
+  /* The lamp, and the reason the page is open at all. Largest thing in the
+     box, so "is it running?" is answered from arm's length rather than only
+     once you are close enough to read the stage line under it. */
+  .status .state-line { font-size: 1.3em; }
+  .status .state { font-weight: 700; }
   .status.running { background: #e7f6ec; border-color: #1a7f37; color: #14532d; }
   .status.paused { background: #fdf3e3; border-color: #b06d00; color: #7a4a00; }
   .status.offline { background: #fbeaea; border-color: #b00020; color: #7a0016; }
   .status.offline form { display: none; }
-  .status .stage { margin-top: 3px; font-size: 0.95em; }
   /* Which device Start is about to drive, answered where you are already looking. */
-  .status .target { margin-top: 2px; font-size: 0.95em; opacity: .75; }
+  .status .target { opacity: .75; }
   /* A crash puts the exception text in the stage line; let a long Windows path
      wrap instead of scrolling the whole page sideways. */
   .status #status-live { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
@@ -130,7 +142,7 @@ PAGE = """
   .segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
   .segmented label {
     display: flex; align-items: center; justify-content: center; flex: 1;
-    margin: 0; padding: 10px 12px; min-height: 44px; font-size: 0.95em; text-align: center;
+    margin: 0; padding: 10px 12px; min-height: 44px; text-align: center;
     background: #f4f4f4; color: #444; border-left: 1px solid #ddd; cursor: pointer;
     transition: background .12s, color .12s;
   }
@@ -175,7 +187,7 @@ PAGE = """
   .dual-slider input[type=range]:focus-visible::-moz-range-thumb {
     box-shadow: 0 1px 3px rgba(0,0,0,.35), 0 0 0 2px #1a7f37;
   }
-  .slider-readout { margin: 0 0 0.4em; font-variant-numeric: tabular-nums; color: #444; }
+  .slider-readout { margin: 0 0 0.4em; color: #444; }
 
   /* Once a row can hold label and control side by side, put them side by side. */
   @media (min-width: 460px) {
@@ -228,9 +240,9 @@ PAGE = """
      is hidden from it on purpose -- it reticks every second, and a screen reader
      would read the whole box out once a second along with it. #}
   <div id="status-live" role="status">
-    <div>Bot is <span class="state" id="status-state">{{ 'running' if cfg.running else 'paused' }}</span></div>
-    <div class="stage">Stage: <span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed" aria-hidden="true"></span></div>
-    <div class="target">{{ cfg.device_ip }}:{{ cfg.device_port }}</div>
+    <div class="state-line">Bot is <span class="state" id="status-state">{{ 'running' if cfg.running else 'paused' }}</span></div>
+    <div class="readout">Stage: <span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed" aria-hidden="true"></span></div>
+    <div class="target readout">{{ cfg.device_ip }}:{{ cfg.device_port }}</div>
   </div>
   <form method="post" action="/control">
     <button type="submit" name="action" id="control-button" value="{{ 'pause' if cfg.running else 'start' }}">
@@ -270,7 +282,7 @@ PAGE = """
              aria-label="Longest interval between taps, in seconds"
              value="{{ cfg.auto_jump_max_interval }}" oninput="syncAutoJumpSlider('max')">
     </div>
-    <div class="slider-readout">
+    <div class="slider-readout readout">
       <output id="auto_jump_min_out">{{ cfg.auto_jump_min_interval }}</output>s &ndash;
       <output id="auto_jump_max_out">{{ cfg.auto_jump_max_interval }}</output>s between taps
     </div>
