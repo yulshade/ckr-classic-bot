@@ -182,3 +182,8 @@ runtime_config.json
 # AI assistant files
 .claude/
 CLAUDE.md
+
+# Impeccable design docs
+PRODUCT.md
+DESIGN.md
+.impeccable/

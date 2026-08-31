@@ -16,7 +16,7 @@ import time
 from flask import Flask, render_template_string, request
 
 import runtime_config
-from config import BOOST_CHOICES, ITEM_MODE_CHOICES, ITEM_MODE_VALUES
+from config import BOOST_CHOICES, ITEM_MODE_CHOICES, ITEM_MODE_OFF, ITEM_MODE_VALUES
 
 app = Flask(__name__)
 app.logger.disabled = True
@@ -26,7 +26,7 @@ logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 PAGE = """
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -45,22 +45,30 @@ PAGE = """
     -webkit-text-size-adjust: 100%;
   }
   ::selection { background: #cdebd6; }
-  h1 { font-size: 1.3em; margin: 0 0 0.7em; }
+  h1 { font-size: 1.3em; font-weight: 700; margin: 0 0 0.7em; }
   p { margin: 0.8em 0; }
   fieldset {
     margin: 0 0 1.2em; padding: 0.4em 0.9em 0.9em;
     border: 1px solid #ccc; border-radius: 6px;
   }
-  legend { padding: 0 4px; color: #444; }
+  legend { padding: 0 4px; color: #444; font-weight: 600; }
   label { display: block; margin: 0.5em 0; }
   select, input[type=text], input[type=number] {
     font: inherit; font-size: 16px;  /* 16px, or iOS Safari zooms the page on focus */
-    min-height: 40px; padding: 7px 8px; color: inherit; background: #fff;
-    border: 1px solid #bbb; border-radius: 6px;
+    min-height: 44px; padding: 7px 8px; color: inherit; background: #fff;
+    border: 1px solid #8f8f8f; border-radius: 6px;
   }
   button {
     font: inherit; min-height: 44px; padding: 10px 22px; cursor: pointer;
-    color: #222; background: #fff; border: 1px solid #bbb; border-radius: 6px;
+    color: #222; background: #fff; border: 1px solid #8f8f8f; border-radius: 6px;
+  }
+  /* The switch and the segments ring themselves further down; these are the
+     plain controls, which would otherwise fall back to the browser default. */
+  button:focus-visible,
+  select:focus-visible,
+  input[type=text]:focus-visible,
+  input[type=number]:focus-visible {
+    outline: 2px solid #1a7f37; outline-offset: 2px;
   }
   .saved { color: #1a7f37; font-weight: bold; }
   .save { width: 100%; }
@@ -74,19 +82,33 @@ PAGE = """
   .status.offline { background: #fbeaea; border-color: #b00020; color: #7a0016; }
   .status.offline form { display: none; }
   .status .stage { margin-top: 3px; font-size: 0.95em; }
+  /* Which device Start is about to drive, answered where you are already looking. */
+  .status .target { margin-top: 2px; font-size: 0.95em; opacity: .75; }
+  /* A crash puts the exception text in the stage line; let a long Windows path
+     wrap instead of scrolling the whole page sideways. */
+  .status #status-live { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   .status form { margin: 0 0 0 auto; }
-  .status button { min-height: 40px; padding: 8px 20px; }
+  .status button { min-height: 44px; padding: 10px 20px; }
+  /* Start is the only control on this page with a physical consequence -- it
+     sets the bot tapping a real device -- so it leads by weight, and Pause
+     stays the quiet one. Weight rather than the accent: green here means
+     something IS on, and nothing is on yet when this button says Start. */
+  .status.paused button { color: #fff; background: #222; border-color: #222; }
   .opt-row {
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
     min-height: 44px; margin: 0.5em 0;
   }
   .opt-row .opt-name { flex: 1 1 auto; margin: 0; min-width: 0; }
+  /* When the name labels a control it toggles it, so it has to look tappable. */
+  label.opt-name { cursor: pointer; }
   .opt-row select { flex: 1 1 100%; }
   .switch { position: relative; display: block; flex: none; width: 48px; height: 28px; margin: 0; }
   .switch input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
   .switch .slider {
     position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-    background: #ccc; border-radius: 28px; cursor: pointer; transition: background .15s;
+    /* The track is the whole control when it is off, so it carries the 3:1
+       boundary itself rather than leaning on a border. */
+    background: #8f8f8f; border-radius: 28px; cursor: pointer; transition: background .15s;
   }
   .switch .slider::before {
     content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px;
@@ -103,7 +125,7 @@ PAGE = """
   .switch input[type=checkbox]:focus-visible + .slider { outline: 2px solid #1a7f37; outline-offset: 2px; }
   .segmented {
     position: relative; display: flex; flex: 1 1 100%;
-    border: 1px solid #bbb; border-radius: 6px; overflow: hidden;
+    border: 1px solid #8f8f8f; border-radius: 6px; overflow: hidden;
   }
   .segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
   .segmented label {
@@ -114,10 +136,14 @@ PAGE = """
   }
   .segmented label:first-of-type { border-left: none; }
   .segmented input[type=radio]:checked + label { background: #1a7f37; color: #fff; }
+  /* Green means the item will be used. A selected "Off" is still a selection so
+     it still fills, but with Ink: otherwise the lamp colour ends up on the one
+     segment that means nothing is on. */
+  .segmented input[type=radio]:checked + label.off { background: #222; color: #fff; }
   .segmented input[type=radio]:focus-visible + label { outline: 2px solid #1a7f37; outline-offset: -2px; }
   .field { display: flex; align-items: center; gap: 10px; }
   .field input { flex: 1; min-width: 0; }
-  .dual-slider { position: relative; flex: 1 1 100%; height: 44px; margin: 0.2em 0; }
+  .dual-slider { position: relative; height: 44px; margin: 0.2em 0; }
   .dual-slider .track {
     position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
     background: #ddd; border-radius: 2px;
@@ -140,6 +166,15 @@ PAGE = """
     pointer-events: auto; width: 24px; height: 24px; border-radius: 50%;
     background: #1a7f37; border: 3px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: pointer;
   }
+  /* The input itself fills the strip, so ringing it would draw a box round the
+     whole slider; ring the handle instead. Kept as separate rules because a
+     shared selector list voids the whole thing in both engines. */
+  .dual-slider input[type=range]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 1px 3px rgba(0,0,0,.35), 0 0 0 2px #1a7f37;
+  }
+  .dual-slider input[type=range]:focus-visible::-moz-range-thumb {
+    box-shadow: 0 1px 3px rgba(0,0,0,.35), 0 0 0 2px #1a7f37;
+  }
   .slider-readout { margin: 0 0 0.4em; font-variant-numeric: tabular-nums; color: #444; }
 
   /* Once a row can hold label and control side by side, put them side by side. */
@@ -153,6 +188,7 @@ PAGE = """
   }
   @media (hover: hover) {
     button:hover { background: #f4f4f4; }
+    .status.paused button:hover { background: #444; border-color: #444; }
     .segmented input[type=radio]:not(:checked) + label:hover { background: #eaeaea; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -163,30 +199,38 @@ PAGE = """
 <body>
 {% macro switch(field, name) -%}
 <div class="opt-row">
-  <span class="opt-name">{{ name }}</span>
+  {# The name labels the checkbox rather than floating beside it, so screen
+     readers announce the switch and tapping the words toggles it. #}
+  <label class="opt-name" for="{{ field }}">{{ name }}</label>
   <label class="switch">
-    <input type="checkbox" name="{{ field }}" {% if cfg[field] %}checked{% endif %}>
+    <input type="checkbox" id="{{ field }}" name="{{ field }}" {% if cfg[field] %}checked{% endif %}>
     <span class="slider"></span>
   </label>
 </div>
 {%- endmacro %}
 {% macro mode_toggle(field, name) -%}
 <div class="opt-row">
-  <span class="opt-name">{{ name }}</span>
-  <div class="segmented">
+  {# Each segment has its own label; the group needs one too, or "Fast Start"
+     is never announced -- only "Off", "Buy + Use", "Use only". #}
+  <span class="opt-name" id="{{ field }}_label">{{ name }}</span>
+  <div class="segmented" role="radiogroup" aria-labelledby="{{ field }}_label">
     {%- for value, label in item_mode_choices %}
     <input type="radio" id="{{ field }}_{{ value }}" name="{{ field }}" value="{{ value }}"
            {% if value == cfg[field] %}checked{% endif %}>
-    <label for="{{ field }}_{{ value }}">{{ label }}</label>
+    <label for="{{ field }}_{{ value }}"{% if value == item_mode_off %} class="off"{% endif %}>{{ label }}</label>
     {%- endfor %}
   </div>
 </div>
 {%- endmacro %}
 <h1>CookieRunBot Config</h1>
 <div class="status {{ 'running' if cfg.running else 'paused' }}" id="status">
-  <div>
+  {# role=status announces running/paused and stage changes. The elapsed counter
+     is hidden from it on purpose -- it reticks every second, and a screen reader
+     would read the whole box out once a second along with it. #}
+  <div id="status-live" role="status">
     <div>Bot is <span class="state" id="status-state">{{ 'running' if cfg.running else 'paused' }}</span></div>
-    <div class="stage">Stage: <span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed"></span></div>
+    <div class="stage">Stage: <span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed" aria-hidden="true"></span></div>
+    <div class="target">{{ cfg.device_ip }}:{{ cfg.device_port }}</div>
   </div>
   <form method="post" action="/control">
     <button type="submit" name="action" id="control-button" value="{{ 'pause' if cfg.running else 'start' }}">
@@ -215,12 +259,15 @@ PAGE = """
   <fieldset>
     <legend>Gameplay</legend>
     {{ switch('enable_auto_jump', 'Auto Jump') }}
-    <div class="dual-slider">
+    <div class="dual-slider" id="auto_jump_slider" role="group" aria-label="Seconds between auto jump taps"
+         onpointerdown="jumpAutoJumpSlider(event)">
       <div class="track"></div>
       <div class="range-highlight" id="auto_jump_range_highlight"></div>
       <input type="range" id="auto_jump_min_slider" name="auto_jump_min_interval" min="0.1" max="5.0" step="0.1"
+             aria-label="Shortest interval between taps, in seconds"
              value="{{ cfg.auto_jump_min_interval }}" oninput="syncAutoJumpSlider('min')">
       <input type="range" id="auto_jump_max_slider" name="auto_jump_max_interval" min="0.1" max="5.0" step="0.1"
+             aria-label="Longest interval between taps, in seconds"
              value="{{ cfg.auto_jump_max_interval }}" oninput="syncAutoJumpSlider('max')">
     </div>
     <div class="slider-readout">
@@ -261,6 +308,29 @@ PAGE = """
     hl.style.width = (rightPct - leftPct) + '%';
   }
   syncAutoJumpSlider('min');
+
+  // Only the 24px handles are hit-testable (the inputs themselves have to be
+  // pointer-events:none or the stacked one would swallow every press), so a
+  // press anywhere on the strip brings the nearer handle to it. That also
+  // rescues the min handle when both sit on the same value and the max input,
+  // being later in the DOM, wins the stack.
+  function jumpAutoJumpSlider(event) {
+    if (event.target.tagName === 'INPUT') { return; }  // let a real drag be a drag
+    var minEl = document.getElementById('auto_jump_min_slider');
+    var maxEl = document.getElementById('auto_jump_max_slider');
+    var rect = document.getElementById('auto_jump_slider').getBoundingClientRect();
+    if (!rect.width) { return; }
+    var lo = parseFloat(minEl.min);
+    var hi = parseFloat(minEl.max);
+    var step = parseFloat(minEl.step);
+    var ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    var value = parseFloat((Math.round((lo + ratio * (hi - lo)) / step) * step).toFixed(1));
+    var moved = Math.abs(value - parseFloat(minEl.value)) <= Math.abs(value - parseFloat(maxEl.value))
+      ? 'min' : 'max';
+    (moved === 'min' ? minEl : maxEl).value = value;
+    syncAutoJumpSlider(moved);
+    (moved === 'min' ? minEl : maxEl).focus();
+  }
 
   function describeElapsed(seconds) {
     var s = Math.floor(seconds);
@@ -303,6 +373,7 @@ def _render(saved=False):
         cfg=runtime_config.get(),
         boost_choices=BOOST_CHOICES,
         item_mode_choices=ITEM_MODE_CHOICES,
+        item_mode_off=ITEM_MODE_OFF,
         saved=saved,
     )
 
