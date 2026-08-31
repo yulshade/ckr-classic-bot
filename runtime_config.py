@@ -104,7 +104,9 @@ _state = _load_persisted()
 _state["in_game"] = False
 # Always start paused, regardless of anything left in the persisted file.
 _state["running"] = False
-_state["stage"] = "Not started"
+# The loop overwrites this within a quarter second, but the page can be
+# opened before the loop's first tick, so seed the same words it would.
+_state["stage"] = "Nothing tapped yet"
 _state["stage_since"] = time.time()
 
 

@@ -5,8 +5,8 @@ PyInstaller) that reads/writes the shared state in runtime_config.py.
 
 The status box at the top polls /status once a second, so what the bot is
 actually doing right now (the stage it last detected, or that it is looking
-for one, restarting the app, or unable to reach the device) stays correct
-without reloading the page -- and goes red if the bot process itself is gone.
+for one, restarting the game, or unable to reach the device) stays correct
+without reloading the page -- and goes red if this page cannot reach the bot.
 """
 import logging
 import socket
@@ -30,7 +30,7 @@ PAGE = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>CookieRunBot Config</title>
+<title>{{ 'Running' if cfg.running else 'Paused' }} · CookieRunBot</title>
 <style>
   /* Sized for a phone first: the page gets opened on one to check a running
      bot. Rows stack until there is room for label and control on one line. */
@@ -49,6 +49,8 @@ PAGE = """
     -webkit-text-size-adjust: 100%;
   }
   ::selection { background: #cdebd6; }
+  /* Example values, not labels -- but still text, so still 4.5:1. */
+  ::placeholder { color: #595959; opacity: 1; }
   h1 { font-size: 1.3em; font-weight: 700; margin: 0 0 0.7em; }
   p { margin: 0.8em 0; }
   fieldset {
@@ -93,14 +95,20 @@ PAGE = """
   .status.running { background: #e7f6ec; border-color: #1a7f37; color: #14532d; }
   .status.paused { background: #fdf3e3; border-color: #b06d00; color: #7a4a00; }
   .status.offline { background: #fbeaea; border-color: #b00020; color: #7a0016; }
-  .status.offline form { display: none; }
+  .status.offline form, .status.offline .target { display: none; }
   /* Which device Start is about to drive, answered where you are already looking. */
   .status .target { opacity: .75; }
   /* A crash puts the exception text in the stage line; let a long Windows path
-     wrap instead of scrolling the whole page sideways. */
-  .status #status-live { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-  .status form { margin: 0 0 0 auto; }
-  .status button { min-height: 44px; padding: 10px 20px; }
+     wrap instead of scrolling the whole page sideways. Basis 0 rather than auto:
+     with auto, this column's hypothetical width is the whole max-content of that
+     line, which overflows any phone, so the button wrapped to a row of its own
+     and margin-left:auto stranded it in the corner with the left half empty. */
+  .status #status-live { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+  /* Below the breakpoint the button takes that row deliberately and fills it --
+     the same shape change Save makes, and the most consequential control on the
+     page gets the biggest target while the stage text keeps the full width. */
+  .status form { width: 100%; margin: 0 0 0 auto; }
+  .status button { width: 100%; min-height: 44px; padding: 10px 20px; }
   /* Start is the only control on this page with a physical consequence -- it
      sets the bot tapping a real device -- so it leads by weight, and Pause
      stays the quiet one. Weight rather than the accent: green here means
@@ -110,7 +118,7 @@ PAGE = """
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
     min-height: 44px; margin: 0.5em 0;
   }
-  .opt-row .opt-name { flex: 1 1 auto; margin: 0; min-width: 0; }
+  .opt-row .opt-name { flex: 1 1 0; margin: 0; min-width: 0; }
   /* When the name labels a control it toggles it, so it has to look tappable. */
   label.opt-name { cursor: pointer; }
   .opt-row select { flex: 1 1 100%; }
@@ -153,8 +161,12 @@ PAGE = """
      segment that means nothing is on. */
   .segmented input[type=radio]:checked + label.off { background: #222; color: #fff; }
   .segmented input[type=radio]:focus-visible + label { outline: 2px solid #1a7f37; outline-offset: -2px; }
-  .field { display: flex; align-items: center; gap: 10px; }
-  .field input { flex: 1; min-width: 0; }
+  /* Two columns, so the label column sizes itself to the widest label and both
+     inputs share a left edge. With the labels inline, "IP:" and "Port:" being
+     different lengths left the two inputs starting at different x. */
+  .field-grid { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px 12px; }
+  .field-grid label { margin: 0; }
+  .field-grid input { min-width: 0; }
   .dual-slider { position: relative; height: 44px; margin: 0.2em 0; }
   .dual-slider .track {
     position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
@@ -192,10 +204,10 @@ PAGE = """
   /* Once a row can hold label and control side by side, put them side by side. */
   @media (min-width: 460px) {
     .opt-row { flex-wrap: nowrap; }
-    .opt-row .opt-name { flex: 1; }
     .opt-row select { flex: 0 0 auto; }
     .segmented { flex: 0 0 auto; }
     .segmented label { flex: 0 0 auto; }
+    .status form, .status button { width: auto; }
     .save { width: auto; }
   }
   @media (hover: hover) {
@@ -241,8 +253,8 @@ PAGE = """
      would read the whole box out once a second along with it. #}
   <div id="status-live" role="status">
     <div class="state-line">Bot is <span class="state" id="status-state">{{ 'running' if cfg.running else 'paused' }}</span></div>
-    <div class="readout">Stage: <span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed" aria-hidden="true"></span></div>
-    <div class="target readout">{{ cfg.device_ip }}:{{ cfg.device_port }}</div>
+    <div class="readout"><span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed" aria-hidden="true"></span></div>
+    <div class="target readout">Device {{ cfg.device_ip }}:{{ cfg.device_port }}</div>
   </div>
   <form method="post" action="/control">
     <button type="submit" name="action" id="control-button" value="{{ 'pause' if cfg.running else 'start' }}">
@@ -250,8 +262,8 @@ PAGE = """
     </button>
   </form>
 </div>
-<p>Changes apply on the bot's next loop tick &mdash; no restart needed.</p>
-{% if saved %}<p class="saved">Saved.</p>{% endif %}
+<p>Saved options take effect within a second, without restarting the bot.</p>
+{% if saved %}<p class="saved">Options saved.</p>{% endif %}
 <form method="post" action="/update">
   <fieldset>
     <legend>Run options</legend>
@@ -259,7 +271,7 @@ PAGE = """
     {{ mode_toggle('cookie_relay_mode', 'Cookie Relay') }}
     {{ switch('use_desired_random_boost', 'Desired Random Boost') }}
     <div class="opt-row">
-      <label class="opt-name" for="desired_boost_name">Boost (must match the boost configured in-game)</label>
+      <label class="opt-name" for="desired_boost_name">Boost (must match the one set in the game)</label>
       <select name="desired_boost_name" id="desired_boost_name">
         {% for name, _ in boost_choices %}
         <option value="{{ name }}" {% if name == cfg.desired_boost_name %}selected{% endif %}>{{ name }}</option>
@@ -283,21 +295,31 @@ PAGE = """
              value="{{ cfg.auto_jump_max_interval }}" oninput="syncAutoJumpSlider('max')">
     </div>
     <div class="slider-readout readout">
+      Random interval:
       <output id="auto_jump_min_out">{{ cfg.auto_jump_min_interval }}</output>s &ndash;
       <output id="auto_jump_max_out">{{ cfg.auto_jump_max_interval }}</output>s between taps
     </div>
   </fieldset>
   <fieldset>
     <legend>Friends &amp; lives</legend>
-    {{ switch('enable_send_friend_life', 'Send Friend Life (after each session reset)') }}
-    {{ switch('enable_quick_receive_send_lives', 'Quick Receive/Send Lives (periodic mailbox pass)') }}
+    {# Both intervals hold together when the label wraps: U+2060 word joiners
+       either side of the en dash so the range never splits, and a U+00A0
+       before the unit so it never orphans. Both are invisible here. #}
+    {{ switch('enable_send_friend_life', 'Send Friend Life (at each session reset, every 1.5⁠–⁠3 h)') }}
+    {{ switch('enable_quick_receive_send_lives', 'Quick Receive/Send Lives (mailbox pass every 25⁠–⁠35 min)') }}
   </fieldset>
   <fieldset>
     <legend>Device</legend>
-    <label class="field">IP: <input type="text" name="device_ip" inputmode="decimal" value="{{ cfg.device_ip }}"></label>
-    <label class="field">Port: <input type="number" name="device_port" inputmode="numeric" value="{{ cfg.device_port }}"></label>
+    <div class="field-grid">
+      <label for="device_ip">IP:</label>
+      <input type="text" id="device_ip" name="device_ip" inputmode="decimal" placeholder="127.0.0.1"
+             value="{{ cfg.device_ip }}" required>
+      <label for="device_port">Port:</label>
+      <input type="number" id="device_port" name="device_port" inputmode="numeric" placeholder="7555"
+             min="1" max="65535" value="{{ cfg.device_port }}" required>
+    </div>
   </fieldset>
-  <button type="submit" class="save">Save</button>
+  <button type="submit" class="save">Save changes</button>
 </form>
 <script>
   function syncAutoJumpSlider(moved) {
@@ -358,12 +380,15 @@ PAGE = """
     var button = document.getElementById('control-button');
     button.value = status.running ? 'pause' : 'start';
     button.textContent = status.running ? 'Pause' : 'Start';
+    document.title = (status.running ? 'Running' : 'Paused') + ' · CookieRunBot';
   }
   function showOffline() {
     document.getElementById('status').className = 'status offline';
-    document.getElementById('status-state').textContent = 'not responding';
-    document.getElementById('status-stage').textContent = 'the bot is not running';
+    document.getElementById('status-state').textContent = 'unreachable';
+    document.getElementById('status-stage').textContent =
+      "This page can't reach the bot — retrying every second.";
     document.getElementById('status-elapsed').textContent = '';
+    document.title = 'Unreachable · CookieRunBot';
   }
   function pollStatus() {
     fetch('/status', { cache: 'no-store' })

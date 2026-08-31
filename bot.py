@@ -131,7 +131,9 @@ def main():
                     last_stage = None
                     print("⏸️ Paused — press Start in the config UI to "
                           + ("resume." if has_run else "begin."))
-                runtime_config.set_stage("Paused" if has_run else "Not started")
+                runtime_config.set_stage(
+                    "Not touching the device" if has_run
+                    else "Nothing tapped yet")
                 time.sleep(0.25)
                 continue
             if paused_since is not None:
@@ -172,7 +174,7 @@ def main():
                     device_unreachable = True
                     print(f"📵 Lost the device at {device_ip}:{device_port} ({capture_error}) — retrying...")
                 runtime_config.update(in_game=False)
-                runtime_config.set_stage("Device unreachable — reconnecting...")
+                runtime_config.set_stage("Device not responding — reconnecting...")
                 last_stage = None
                 try:
                     device_connect(device_ip, device_port)
@@ -200,7 +202,7 @@ def main():
                         # Unknown screen for too long — restart the app to get
                         # back to a known one, then check the stage again.
                         print(f"❓ No stage recognized {resync_elapsed:.0f}s after resuming — restarting app...")
-                        runtime_config.set_stage("Restarting the app...")
+                        runtime_config.set_stage("Restarting the game...")
                         device_reset_app(device_ip, device_port)
                         time.sleep(5)
                         close_announcement_dialog()
@@ -231,11 +233,11 @@ def main():
 
             if stage is not None:
                 last_known_stage_time = time.time()
-                runtime_config.set_stage(stage)
+                runtime_config.set_stage(f"Stage: {stage}")
             elif time.time() - last_known_stage_time >= UNKNOWN_STAGE_REPORT_DELAY:
                 # Nothing has matched for a while: the game was closed or
                 # crashed, or it is on a screen there is no template for.
-                runtime_config.set_stage("Unknown screen — searching...")
+                runtime_config.set_stage("No stage recognized — still looking...")
 
             if stage == last_stage:
                 time.sleep(0.1)
@@ -262,7 +264,7 @@ def main():
                 elapsed = time.time() - session_start_time
                 if elapsed >= session_reset_interval:
                     print(f"🔄 Session reset triggered after {elapsed / 3600:.2f}h — restarting app...")
-                    runtime_config.set_stage("Restarting the app (session reset)...")
+                    runtime_config.set_stage("Restarting the game (session reset)...")
                     device_reset_app(device_ip, device_port)
                     time.sleep(5)
                     close_announcement_dialog()
@@ -393,7 +395,7 @@ def main():
                 last_stage = None
             elif stage == "CONNECTION_LOST":
                 print("🔌 Detected Stage: CONNECTION_LOST")
-                runtime_config.set_stage("Restarting the app (connection lost)...")
+                runtime_config.set_stage("Restarting the game (connection lost)...")
                 device_reset_app(device_ip, device_port)
                 time.sleep(5)
                 close_announcement_dialog()
