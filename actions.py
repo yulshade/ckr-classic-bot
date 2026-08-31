@@ -31,6 +31,8 @@ from config import (
     EXIT_GAME_SETTINGS_BUTTON,
     EXIT_PARTY_RUN_MODE_BUTTON,
     FAST_START_ITEM,
+    FAST_START_SPAM_DURATION,
+    FAST_START_SPAM_INTERVAL,
     FAST_START_USE_BUTTON,
     FRIEND_BOTTOM_LEADERBOARD_REGION,
     FRIEND_BOTTOM_LEADERBOARD_TEMPLATE,
@@ -131,6 +133,25 @@ def using_fast_start():
     print("⚡ Using Fast Start...")
     safe_device_tap(*get_device(), FAST_START_USE_BUTTON[0], FAST_START_USE_BUTTON[1])
     time.sleep(random.uniform(0.8, 1.2))
+
+
+def spam_fast_start(duration: float = FAST_START_SPAM_DURATION, interval: float = FAST_START_SPAM_INTERVAL):
+    """Blind-tap the Fast Start use button as fast as possible.
+
+    Waiting to detect GAME_START first costs a screen capture + template match
+    per poll, which made the boost fire late and run distance inconsistent. The
+    button only exists for a moment right after Play, so spam the spot until
+    that window has certainly passed; the GAME_START branch in bot.py still
+    catches the rare miss.
+    """
+    print(f"⚡ Spamming Fast Start for {duration:.1f}s...")
+    end_time = time.time() + duration
+    taps = 0
+    while time.time() < end_time:
+        safe_device_tap(*get_device(), FAST_START_USE_BUTTON[0], FAST_START_USE_BUTTON[1])
+        taps += 1
+        time.sleep(interval)
+    print(f"⚡ Fast Start spam finished ({taps} taps).")
 
 
 def using_cookie_relay():

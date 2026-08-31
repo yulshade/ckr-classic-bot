@@ -268,6 +268,12 @@ PURCHASE_BUTTON = (925, 295)
 MULTI_PURCHASE_BUTTON = (1100, 195)
 MULTI_BUY_BUTTON = (640, 587)
 FAST_START_USE_BUTTON = (655, 340)
+# With Fast Start on, the bot doesn't wait to detect GAME_START before tapping:
+# a capture + template match per poll made the boost fire late and run distance
+# inconsistent. It blind-spams the use button for this long right after Play
+# instead, so the boost goes off the moment the button appears.
+FAST_START_SPAM_DURATION = 8.0
+FAST_START_SPAM_INTERVAL = 0.05
 COOKIE_RELAY_USE_BUTTON = (655, 340)
 COMPLETE_FINISH_BUTTON = (460, 625)
 ACCEPT_MYSTERY_BOX_BUTTON = (650, 645)

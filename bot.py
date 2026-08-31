@@ -31,6 +31,7 @@ from actions import (
     purchase_desired_random_boost,
     purchase_fast_start,
     run_auto_jump,
+    spam_fast_start,
     start_game,
     using_cookie_relay,
     using_fast_start,
@@ -304,6 +305,9 @@ def main():
                 if options["use_desired_random_boost"]:
                     purchase_desired_random_boost(options["desired_boost_template"], options["desired_boost_name"])
                 play_game()
+                if options["use_fast_start"]:
+                    runtime_config.set_stage("Using Fast Start...")
+                    spam_fast_start()
                 detection_group = "IN_GAME"
                 time.sleep(0.2)
                 last_stage = None
