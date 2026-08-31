@@ -15,7 +15,7 @@ import time
 from flask import Flask, render_template_string, request
 
 import runtime_config
-from config import BOOST_CHOICES
+from config import BOOST_CHOICES, ITEM_MODE_CHOICES, ITEM_MODE_VALUES
 
 app = Flask(__name__)
 app.logger.disabled = True
@@ -49,7 +49,31 @@ PAGE = """
   .status .stage { margin-top: 3px; font-size: 0.95em; }
   .status form { margin: 0 0 0 auto; }
   .status button { padding: 6px 18px; }
-  .dual-slider { position: relative; height: 24px; margin: 0.6em 0 0.2em 1.6em; }
+  .opt-row { display: flex; align-items: center; gap: 12px; margin: 0.6em 0; }
+  .opt-row .opt-name { flex: 1; margin: 0; }
+  .switch { position: relative; display: block; flex: none; width: 42px; height: 22px; margin: 0; }
+  .switch input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    background: #ccc; border-radius: 22px; cursor: pointer; transition: background .15s;
+  }
+  .switch .slider::before {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+    background: #fff; border-radius: 50%; transition: transform .15s;
+  }
+  .switch input[type=checkbox]:checked + .slider { background: #1a7f37; }
+  .switch input[type=checkbox]:checked + .slider::before { transform: translateX(20px); }
+  .switch input[type=checkbox]:focus-visible + .slider { outline: 2px solid #1a7f37; outline-offset: 2px; }
+  .segmented { position: relative; display: inline-flex; border: 1px solid #bbb; border-radius: 6px; overflow: hidden; }
+  .segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
+  .segmented label {
+    display: block; margin: 0; padding: 5px 12px; font-size: 0.9em;
+    background: #f4f4f4; color: #444; border-left: 1px solid #ddd; cursor: pointer;
+  }
+  .segmented label:first-of-type { border-left: none; }
+  .segmented input[type=radio]:checked + label { background: #1a7f37; color: #fff; }
+  .segmented input[type=radio]:focus-visible + label { outline: 2px solid #1a7f37; outline-offset: -2px; }
+  .dual-slider { position: relative; height: 24px; margin: 0.6em 0 0.2em; }
   .dual-slider .track {
     position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
     background: #ddd; border-radius: 2px;
@@ -72,10 +96,31 @@ PAGE = """
     pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
     background: #1a7f37; border: 2px solid #fff; cursor: pointer;
   }
-  .slider-readout { margin: 0.2em 0 0.3em 1.6em; font-variant-numeric: tabular-nums; color: #444; }
+  .slider-readout { margin: 0.2em 0 0.3em; font-variant-numeric: tabular-nums; color: #444; }
 </style>
 </head>
 <body>
+{% macro switch(field, name) -%}
+<div class="opt-row">
+  <span class="opt-name">{{ name }}</span>
+  <label class="switch">
+    <input type="checkbox" name="{{ field }}" {% if cfg[field] %}checked{% endif %}>
+    <span class="slider"></span>
+  </label>
+</div>
+{%- endmacro %}
+{% macro mode_toggle(field, name) -%}
+<div class="opt-row">
+  <span class="opt-name">{{ name }}</span>
+  <div class="segmented">
+    {%- for value, label in item_mode_choices %}
+    <input type="radio" id="{{ field }}_{{ value }}" name="{{ field }}" value="{{ value }}"
+           {% if value == cfg[field] %}checked{% endif %}>
+    <label for="{{ field }}_{{ value }}">{{ label }}</label>
+    {%- endfor %}
+  </div>
+</div>
+{%- endmacro %}
 <h1>CookieRunBot Config</h1>
 <div class="status {{ 'running' if cfg.running else 'paused' }}" id="status">
   <div>
@@ -93,28 +138,22 @@ PAGE = """
 <form method="post" action="/update">
   <fieldset>
     <legend>Run options</legend>
-    <label><input type="checkbox" name="use_fast_start" {% if cfg.use_fast_start %}checked{% endif %}> Fast Start (buy + use)</label>
-    <label><input type="checkbox" name="use_cookie_relay" {% if cfg.use_cookie_relay %}checked{% endif %}> Cookie Relay (buy + use)</label>
-    <label>
-      <input type="checkbox" name="use_desired_random_boost" {% if cfg.use_desired_random_boost %}checked{% endif %}>
-      Desired Random Boost (buy + use)
-    </label>
-    <label>
-      Boost (must match the boost configured in-game):
-      <select name="desired_boost_name">
+    {{ mode_toggle('fast_start_mode', 'Fast Start') }}
+    {{ mode_toggle('cookie_relay_mode', 'Cookie Relay') }}
+    {{ switch('use_desired_random_boost', 'Desired Random Boost') }}
+    <div class="opt-row">
+      <label class="opt-name" for="desired_boost_name">Boost (must match the boost configured in-game)</label>
+      <select name="desired_boost_name" id="desired_boost_name">
         {% for name, _ in boost_choices %}
         <option value="{{ name }}" {% if name == cfg.desired_boost_name %}selected{% endif %}>{{ name }}</option>
         {% endfor %}
       </select>
-    </label>
-    <label><input type="checkbox" name="detect_relic" {% if cfg.detect_relic %}checked{% endif %}> Detect Relic (open + claim)</label>
+    </div>
+    {{ switch('detect_relic', 'Detect Relic') }}
   </fieldset>
   <fieldset>
     <legend>Gameplay</legend>
-    <label>
-      <input type="checkbox" name="enable_auto_jump" {% if cfg.enable_auto_jump %}checked{% endif %}>
-      Auto Jump (taps the fixed Jump button at a random interval while a run is in progress)
-    </label>
+    {{ switch('enable_auto_jump', 'Auto Jump') }}
     <div class="dual-slider">
       <div class="track"></div>
       <div class="range-highlight" id="auto_jump_range_highlight"></div>
@@ -130,8 +169,8 @@ PAGE = """
   </fieldset>
   <fieldset>
     <legend>Friends &amp; lives</legend>
-    <label><input type="checkbox" name="enable_send_friend_life" {% if cfg.enable_send_friend_life %}checked{% endif %}> Send Friend Life (after each session reset)</label>
-    <label><input type="checkbox" name="enable_quick_receive_send_lives" {% if cfg.enable_quick_receive_send_lives %}checked{% endif %}> Quick Receive/Send Lives (periodic mailbox pass)</label>
+    {{ switch('enable_send_friend_life', 'Send Friend Life (after each session reset)') }}
+    {{ switch('enable_quick_receive_send_lives', 'Quick Receive/Send Lives (periodic mailbox pass)') }}
   </fieldset>
   <fieldset>
     <legend>Device</legend>
@@ -198,12 +237,27 @@ PAGE = """
 
 
 def _render(saved=False):
-    return render_template_string(PAGE, cfg=runtime_config.get(), boost_choices=BOOST_CHOICES, saved=saved)
+    return render_template_string(
+        PAGE,
+        cfg=runtime_config.get(),
+        boost_choices=BOOST_CHOICES,
+        item_mode_choices=ITEM_MODE_CHOICES,
+        saved=saved,
+    )
 
 
 @app.route("/", methods=["GET"])
 def index():
     return _render()
+
+
+def _item_mode_from_form(form, field, current):
+    """Read one three-stage item toggle, falling back to the current value."""
+    try:
+        mode = int(form.get(field, ""))
+    except ValueError:
+        return current[field]
+    return mode if mode in ITEM_MODE_VALUES else current[field]
 
 
 @app.route("/update", methods=["POST"])
@@ -235,8 +289,8 @@ def update():
         auto_jump_min_interval, auto_jump_max_interval = auto_jump_max_interval, auto_jump_min_interval
 
     runtime_config.update(
-        use_fast_start="use_fast_start" in form,
-        use_cookie_relay="use_cookie_relay" in form,
+        fast_start_mode=_item_mode_from_form(form, "fast_start_mode", current),
+        cookie_relay_mode=_item_mode_from_form(form, "cookie_relay_mode", current),
         use_desired_random_boost="use_desired_random_boost" in form,
         desired_boost_name=desired_boost_name,
         desired_boost_template=desired_boost_template,

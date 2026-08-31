@@ -40,6 +40,8 @@ from config import (
     DETECTION_ALWAYS_STAGES,
     DETECTION_GROUPS,
     DETECTION_RECOVERY_SCAN_INTERVAL,
+    ITEM_MODE_BUY_AND_USE,
+    ITEM_MODE_OFF,
     RESUME_STAGE_CHECK_TIMEOUT,
     SESSION_RESET_INTERVAL,
     UNKNOWN_STAGE_REPORT_DELAY,
@@ -298,14 +300,14 @@ def main():
                 detection_group = "PRE_GAME"
             elif stage == "PURCHASE_ITEM":
                 print("🛒 Detected Stage: PURCHASE_ITEM")
-                if options["use_fast_start"]:
+                if options["fast_start_mode"] == ITEM_MODE_BUY_AND_USE:
                     purchase_fast_start()
-                if options["use_cookie_relay"]:
+                if options["cookie_relay_mode"] == ITEM_MODE_BUY_AND_USE:
                     purchase_cookie_relay()
                 if options["use_desired_random_boost"]:
                     purchase_desired_random_boost(options["desired_boost_template"], options["desired_boost_name"])
                 play_game()
-                if options["use_fast_start"]:
+                if options["fast_start_mode"] != ITEM_MODE_OFF:
                     runtime_config.set_stage("Using Fast Start...")
                     spam_fast_start()
                 detection_group = "IN_GAME"
@@ -313,12 +315,12 @@ def main():
                 last_stage = None
             elif stage == "GAME_START":
                 print("🏁 Detected Stage: GAME_START")
-                if options["use_fast_start"]:
+                if options["fast_start_mode"] != ITEM_MODE_OFF:
                     using_fast_start()
                 detection_group = "IN_GAME"
             elif stage == "GAME_RELAY":
                 print("🔄 Detected Stage: GAME_RELAY")
-                if options["use_cookie_relay"]:
+                if options["cookie_relay_mode"] != ITEM_MODE_OFF:
                     using_cookie_relay()
                 detection_group = "IN_GAME"
             elif stage == "GAME_COMPLETE":

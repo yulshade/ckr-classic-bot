@@ -138,6 +138,25 @@ BOOST_CHOICES = [
 ]
 
 # -------------------
+# ITEM MODES
+# -------------------
+# Fast Start and Cookie Relay each have two independent steps: buying the item
+# on the PURCHASE_ITEM screen, and tapping its use button once the run starts.
+# The config UI exposes them as one three-stage toggle per item so the item can
+# be used without being bought (e.g. when it is already stocked or granted).
+ITEM_MODE_OFF = 0
+ITEM_MODE_BUY_AND_USE = 1
+ITEM_MODE_USE_ONLY = 2
+
+# Value -> label, in the order the toggle segments are rendered.
+ITEM_MODE_CHOICES = [
+    (ITEM_MODE_OFF, "Off"),
+    (ITEM_MODE_BUY_AND_USE, "Buy + Use"),
+    (ITEM_MODE_USE_ONLY, "Use only"),
+]
+ITEM_MODE_VALUES = [value for value, _ in ITEM_MODE_CHOICES]
+
+# -------------------
 # STAGE MAP
 # -------------------
 STAGE_TEMPLATES = {

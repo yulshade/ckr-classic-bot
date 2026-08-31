@@ -14,7 +14,15 @@ import sys
 import threading
 import time
 
-from config import AUTO_JUMP_INTERVAL, BOOST_CHOICES, DEVICE_IP, DEVICE_PORT
+from config import (
+    AUTO_JUMP_INTERVAL,
+    BOOST_CHOICES,
+    DEVICE_IP,
+    DEVICE_PORT,
+    ITEM_MODE_BUY_AND_USE,
+    ITEM_MODE_OFF,
+    ITEM_MODE_VALUES,
+)
 
 _lock = threading.Lock()
 
@@ -22,8 +30,8 @@ _DEFAULTS = {
     "running": False,
     "device_ip": DEVICE_IP,
     "device_port": DEVICE_PORT,
-    "use_fast_start": False,
-    "use_cookie_relay": False,
+    "fast_start_mode": ITEM_MODE_OFF,
+    "cookie_relay_mode": ITEM_MODE_OFF,
     "use_desired_random_boost": False,
     "desired_boost_name": BOOST_CHOICES[0][0],
     "desired_boost_template": BOOST_CHOICES[0][1],
@@ -54,6 +62,27 @@ def _boost_template_for(name):
     return _DEFAULTS["desired_boost_template"]
 
 
+def _item_mode(value, fallback):
+    """Coerce a persisted value into a valid ITEM_MODE_* constant."""
+    try:
+        mode = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return mode if mode in ITEM_MODE_VALUES else fallback
+
+
+def _migrate_legacy(saved, state):
+    """Carry over the pre-three-stage booleans from an older config file.
+
+    Fast Start and Cookie Relay used to be a single on/off flag that gated both
+    buying and using the item, which is exactly what ITEM_MODE_BUY_AND_USE now
+    means -- so an old True becomes that mode rather than resetting to Off.
+    """
+    for legacy_key, key in (("use_fast_start", "fast_start_mode"), ("use_cookie_relay", "cookie_relay_mode")):
+        if key not in saved and legacy_key in saved:
+            state[key] = ITEM_MODE_BUY_AND_USE if saved[legacy_key] else ITEM_MODE_OFF
+
+
 def _load_persisted():
     state = dict(_DEFAULTS)
     try:
@@ -64,6 +93,9 @@ def _load_persisted():
     for key, value in saved.items():
         if key in _DEFAULTS:
             state[key] = value
+    _migrate_legacy(saved, state)
+    for key in ("fast_start_mode", "cookie_relay_mode"):
+        state[key] = _item_mode(state[key], _DEFAULTS[key])
     state["desired_boost_template"] = _boost_template_for(state["desired_boost_name"])
     return state
 
