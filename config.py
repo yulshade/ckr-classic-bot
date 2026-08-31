@@ -11,7 +11,11 @@ AUTO_JUMP_INTERVAL = (0.3, 1.0)  # seeds runtime_config's auto_jump_min/max_inte
 # -------------------
 # CONFIG UI
 # -------------------
-WEBUI_HOST = "127.0.0.1"
+# "0.0.0.0" binds every interface, so the page is reachable from a phone or
+# second device on the same network -- not just the host. There is no auth on
+# it: anyone who can reach the port can start/pause the bot and change the
+# device target. Set this back to "127.0.0.1" to keep it on the host only.
+WEBUI_HOST = "0.0.0.0"
 WEBUI_PORT = 5000
 
 # -------------------

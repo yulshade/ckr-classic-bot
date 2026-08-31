@@ -9,6 +9,7 @@ for one, restarting the app, or unable to reach the device) stays correct
 without reloading the page -- and goes red if the bot process itself is gone.
 """
 import logging
+import socket
 import threading
 import time
 
@@ -28,18 +29,44 @@ PAGE = """
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CookieRunBot Config</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; color: #222; }
-  h1 { font-size: 1.3em; }
-  fieldset { margin-bottom: 1.2em; border: 1px solid #ccc; border-radius: 6px; }
+  /* Sized for a phone first: the page gets opened on one to check a running
+     bot. Rows stack until there is room for label and control on one line. */
+  * { box-sizing: border-box; }
+  :root { color-scheme: light; }
+  body {
+    font-family: system-ui, sans-serif; color: #222; background: #fff;
+    max-width: 520px; margin: 0 auto; padding: 24px 16px 40px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(40px, env(safe-area-inset-bottom));
+    -webkit-text-size-adjust: 100%;
+  }
+  ::selection { background: #cdebd6; }
+  h1 { font-size: 1.3em; margin: 0 0 0.7em; }
+  p { margin: 0.8em 0; }
+  fieldset {
+    margin: 0 0 1.2em; padding: 0.4em 0.9em 0.9em;
+    border: 1px solid #ccc; border-radius: 6px;
+  }
+  legend { padding: 0 4px; color: #444; }
   label { display: block; margin: 0.5em 0; }
-  select, input[type=text], input[type=number] { padding: 4px; }
-  button { padding: 8px 20px; font-size: 1em; }
+  select, input[type=text], input[type=number] {
+    font: inherit; font-size: 16px;  /* 16px, or iOS Safari zooms the page on focus */
+    min-height: 40px; padding: 7px 8px; color: inherit; background: #fff;
+    border: 1px solid #bbb; border-radius: 6px;
+  }
+  button {
+    font: inherit; min-height: 44px; padding: 10px 22px; cursor: pointer;
+    color: #222; background: #fff; border: 1px solid #bbb; border-radius: 6px;
+  }
   .saved { color: #1a7f37; font-weight: bold; }
+  .save { width: 100%; }
   .status {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; margin-bottom: 1.2em; border-radius: 6px; border: 1px solid;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px;
+    padding: 12px 14px; margin-bottom: 1.2em; border-radius: 6px; border: 1px solid;
   }
   .status .state { font-weight: bold; }
   .status.running { background: #e7f6ec; border-color: #1a7f37; color: #14532d; }
@@ -48,32 +75,49 @@ PAGE = """
   .status.offline form { display: none; }
   .status .stage { margin-top: 3px; font-size: 0.95em; }
   .status form { margin: 0 0 0 auto; }
-  .status button { padding: 6px 18px; }
-  .opt-row { display: flex; align-items: center; gap: 12px; margin: 0.6em 0; }
-  .opt-row .opt-name { flex: 1; margin: 0; }
-  .switch { position: relative; display: block; flex: none; width: 42px; height: 22px; margin: 0; }
+  .status button { min-height: 40px; padding: 8px 20px; }
+  .opt-row {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+    min-height: 44px; margin: 0.5em 0;
+  }
+  .opt-row .opt-name { flex: 1 1 auto; margin: 0; min-width: 0; }
+  .opt-row select { flex: 1 1 100%; }
+  .switch { position: relative; display: block; flex: none; width: 48px; height: 28px; margin: 0; }
   .switch input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
   .switch .slider {
     position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-    background: #ccc; border-radius: 22px; cursor: pointer; transition: background .15s;
+    background: #ccc; border-radius: 28px; cursor: pointer; transition: background .15s;
   }
   .switch .slider::before {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
-    background: #fff; border-radius: 50%; transition: transform .15s;
+    content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px;
+    background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+    transition: transform .15s;
+  }
+  /* The switch is 28px tall by design; this lifts the tappable area to 44. */
+  .switch .slider::after {
+    content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 100%; min-width: 44px; height: 44px;
   }
   .switch input[type=checkbox]:checked + .slider { background: #1a7f37; }
   .switch input[type=checkbox]:checked + .slider::before { transform: translateX(20px); }
   .switch input[type=checkbox]:focus-visible + .slider { outline: 2px solid #1a7f37; outline-offset: 2px; }
-  .segmented { position: relative; display: inline-flex; border: 1px solid #bbb; border-radius: 6px; overflow: hidden; }
+  .segmented {
+    position: relative; display: flex; flex: 1 1 100%;
+    border: 1px solid #bbb; border-radius: 6px; overflow: hidden;
+  }
   .segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
   .segmented label {
-    display: block; margin: 0; padding: 5px 12px; font-size: 0.9em;
+    display: flex; align-items: center; justify-content: center; flex: 1;
+    margin: 0; padding: 10px 12px; min-height: 44px; font-size: 0.95em; text-align: center;
     background: #f4f4f4; color: #444; border-left: 1px solid #ddd; cursor: pointer;
+    transition: background .12s, color .12s;
   }
   .segmented label:first-of-type { border-left: none; }
   .segmented input[type=radio]:checked + label { background: #1a7f37; color: #fff; }
   .segmented input[type=radio]:focus-visible + label { outline: 2px solid #1a7f37; outline-offset: -2px; }
-  .dual-slider { position: relative; height: 24px; margin: 0.6em 0 0.2em; }
+  .field { display: flex; align-items: center; gap: 10px; }
+  .field input { flex: 1; min-width: 0; }
+  .dual-slider { position: relative; flex: 1 1 100%; height: 44px; margin: 0.2em 0; }
   .dual-slider .track {
     position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
     background: #ddd; border-radius: 2px;
@@ -83,20 +127,37 @@ PAGE = """
     background: #1a7f37; border-radius: 2px;
   }
   .dual-slider input[type=range] {
-    position: absolute; left: 0; top: 0; width: 100%; height: 24px; margin: 0;
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%; margin: 0;
     background: none; pointer-events: none; -webkit-appearance: none; appearance: none;
   }
   .dual-slider input[type=range]::-webkit-slider-runnable-track { -webkit-appearance: none; background: transparent; }
   .dual-slider input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
-    background: #1a7f37; border: 2px solid #fff; box-shadow: 0 0 1px rgba(0,0,0,.5); cursor: pointer;
+    -webkit-appearance: none; pointer-events: auto; width: 24px; height: 24px; border-radius: 50%;
+    background: #1a7f37; border: 3px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: pointer;
   }
   .dual-slider input[type=range]::-moz-range-track { background: transparent; border: none; }
   .dual-slider input[type=range]::-moz-range-thumb {
-    pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
-    background: #1a7f37; border: 2px solid #fff; cursor: pointer;
+    pointer-events: auto; width: 24px; height: 24px; border-radius: 50%;
+    background: #1a7f37; border: 3px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: pointer;
   }
-  .slider-readout { margin: 0.2em 0 0.3em; font-variant-numeric: tabular-nums; color: #444; }
+  .slider-readout { margin: 0 0 0.4em; font-variant-numeric: tabular-nums; color: #444; }
+
+  /* Once a row can hold label and control side by side, put them side by side. */
+  @media (min-width: 460px) {
+    .opt-row { flex-wrap: nowrap; }
+    .opt-row .opt-name { flex: 1; }
+    .opt-row select { flex: 0 0 auto; }
+    .segmented { flex: 0 0 auto; }
+    .segmented label { flex: 0 0 auto; }
+    .save { width: auto; }
+  }
+  @media (hover: hover) {
+    button:hover { background: #f4f4f4; }
+    .segmented input[type=radio]:not(:checked) + label:hover { background: #eaeaea; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -174,10 +235,10 @@ PAGE = """
   </fieldset>
   <fieldset>
     <legend>Device</legend>
-    <label>IP: <input type="text" name="device_ip" value="{{ cfg.device_ip }}"></label>
-    <label>Port: <input type="number" name="device_port" value="{{ cfg.device_port }}"></label>
+    <label class="field">IP: <input type="text" name="device_ip" inputmode="decimal" value="{{ cfg.device_ip }}"></label>
+    <label class="field">Port: <input type="number" name="device_port" inputmode="numeric" value="{{ cfg.device_port }}"></label>
   </fieldset>
-  <button type="submit">Save</button>
+  <button type="submit" class="save">Save</button>
 </form>
 <script>
   function syncAutoJumpSlider(moved) {
@@ -324,6 +385,33 @@ def control():
     return _render()
 
 
+def _lan_ip():
+    """This host's address on the local network, or None if it has none."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # A UDP "connect" sends nothing; it just picks the outbound interface.
+        sock.connect(("8.8.8.8", 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+
+def _display_url(host, port):
+    """A URL someone can actually type, for the startup log.
+
+    WEBUI_HOST is a bind address, not an address to visit: "0.0.0.0" means
+    every interface, which nobody can open. Report loopback for the host plus
+    the LAN address the phone would use.
+    """
+    if host not in ("0.0.0.0", "", "::"):
+        return f"http://{host}:{port}/"
+    url = f"http://127.0.0.1:{port}/"
+    lan_ip = _lan_ip()
+    return f"{url} (from another device: http://{lan_ip}:{port}/)" if lan_ip else url
+
+
 def start(host, port):
     """Start the config UI in a background thread and return its URL."""
     thread = threading.Thread(
@@ -331,4 +419,4 @@ def start(host, port):
         daemon=True,
     )
     thread.start()
-    return f"http://{host}:{port}/"
+    return _display_url(host, port)
