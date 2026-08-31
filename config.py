@@ -270,6 +270,48 @@ DETECTION_RECOVERY_SCAN_INTERVAL = {
     "POST_GAME": 30.0,  # seconds
 }
 
+# -------------------
+# RUN-ALIVE PROBE
+# -------------------
+# A run in progress matches no stage: DETECTION_GROUP_IN_GAME only covers the
+# screens on either side of it (GAME_START / GAME_RELAY / GAME_COMPLETE), so
+# between them detection is blind, for minutes at a time. That makes elapsed
+# time useless for telling a healthy long run from a game that crashed -- any
+# timeout short enough to catch the crash is also short enough to restart a
+# real run mid-way, which costs a life.
+#
+# So the bot asks the screen instead. This template is a UI element that is on
+# screen for the whole run and nowhere else -- the in-run pause button is the
+# intended one, since it sits at a fixed spot and doesn't vary by cookie or
+# map. A hit is positive proof the run is still going, however long it has
+# lasted; a miss, backed by a full stage scan that also found nothing, is
+# positive proof the game is gone and recovery should start.
+#
+# The PNG must be cropped from a live run captured at 1280x720 (see
+# debug.save_debug_screen). Until it exists in templates/, the probe answers
+# "unknown" and the bot behaves exactly as it did before it existed: it never
+# restarts the game out of a run on its own. Add more filenames if the button's
+# artwork varies.
+# IN_RUN_1.png is the in-run coin counter's icon, cropped from a live run: it
+# sits at a fixed spot in the HUD and, unlike the pause button and the Jump /
+# Slide labels, it is opaque rather than translucent, so the scrolling art
+# behind it doesn't drag the match score around. Measured over 12 frames from
+# three different maps it scores 0.97-1.00, where the pause button fell to 0.63
+# -- well under MATCH_THRESHOLD, which would have read as "the run is gone".
+IN_RUN_TEMPLATE = ["IN_RUN_1.png"]
+# A box around the icon rather than the whole screen: cheap to match, and wide
+# enough to tolerate drift. Keep the margin generous -- a region that clips the
+# icon turns "can't tell" into a false "no run", the one answer that can end a
+# live run -- and only ever retune it against real captures.
+IN_RUN_REGION = (540, 0, 650, 72)
+
+# How long the probe has to keep answering "no run" before the bot spends a
+# full unfiltered scan checking. The button can be covered or mid-redraw for a
+# frame or two, so a single miss means nothing; a few seconds of agreement is
+# the difference between catching a crash in seconds and waiting out
+# DETECTION_RECOVERY_SCAN_INTERVAL["IN_GAME"].
+IN_RUN_ABSENT_GRACE = 5.0  # seconds
+
 # How long the post-resume stage check may fail to recognize any stage before
 # the bot gives up and restarts the app to get back to a known screen.
 RESUME_STAGE_CHECK_TIMEOUT = 90.0  # seconds

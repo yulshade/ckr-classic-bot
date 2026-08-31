@@ -40,6 +40,7 @@ from config import (
     DETECTION_ALWAYS_STAGES,
     DETECTION_GROUPS,
     DETECTION_RECOVERY_SCAN_INTERVAL,
+    IN_RUN_ABSENT_GRACE,
     ITEM_MODE_BUY_AND_USE,
     ITEM_MODE_OFF,
     RESUME_STAGE_CHECK_TIMEOUT,
@@ -48,7 +49,7 @@ from config import (
     WEBUI_HOST,
     WEBUI_PORT,
 )
-from detection import detect_stage, load_templates
+from detection import detect_run_alive, detect_stage, load_templates, run_probe_ready
 from debug import save_debug_screen
 
 
@@ -96,6 +97,10 @@ def main():
         print(f"📱 Connecting to device at {device_ip}:{device_port}...")
         device_connect(device_ip, device_port)
         load_templates()
+        if not run_probe_ready():
+            print("🏃 No run-alive template in templates/ (see IN_RUN_TEMPLATE in config.py) "
+                  "— mid-run the bot can't tell a long run from a closed game, so it will keep "
+                  "waiting instead of restarting the game.")
 
         # * for debugging *
         # device_screen = device_capture_screen(device_ip, device_port)
@@ -111,6 +116,8 @@ def main():
         detection_group = "PRE_GAME"
         last_detected_time = time.time()
         last_known_stage_time = time.time()
+        recovery_scan_failed = False
+        run_gone_since = None
         device_unreachable = False
         session_start_time = time.time()
         session_reset_interval = random.uniform(*SESSION_RESET_INTERVAL)
@@ -159,6 +166,10 @@ def main():
                 print(f"📱 Device target changed — reconnecting to {device_ip}:{device_port}...")
                 device_connect(device_ip, device_port)
             relic_exclude = None if options["detect_relic"] else {"RELIC_COMPLETE", "RELIC_CLAIM"}
+            # What the run-alive probe said this iteration, if it was consulted
+            # at all: True in a run, False on a screen that isn't one, None when
+            # it wasn't asked or has no template to answer with.
+            run_alive = None
 
             try:
                 device_screen = device_capture_screen(device_ip, device_port)
@@ -225,19 +236,78 @@ def main():
             else:
                 stage = detect_stage(device_screen, get_detection_stage_names(detection_group, exclude=relic_exclude))
                 if stage is None:
-                    if time.time() - last_detected_time >= DETECTION_RECOVERY_SCAN_INTERVAL[detection_group]:
+                    if detection_group == "IN_GAME":
+                        # Mid-run there is no stage to match, so ask the screen
+                        # itself whether a run is on it.
+                        run_alive = detect_run_alive(device_screen)
+                    if run_alive is False:
+                        if run_gone_since is None:
+                            run_gone_since = time.time()
+                    else:
+                        run_gone_since = None
+                    # The timed scan keeps running even while the probe says the
+                    # run is alive: it takes no action by itself, and it is the
+                    # only thing that recovers if the probe ever answers "in a
+                    # run" on a screen that isn't one. The probe can bring it
+                    # forward, though -- once "no run" has held long enough to
+                    # be believed, waiting out the rest of the in-game interval
+                    # only delays finding out the game is gone.
+                    scan_due = (
+                        time.time() - last_detected_time >= DETECTION_RECOVERY_SCAN_INTERVAL[detection_group]
+                        or (run_gone_since is not None
+                            and time.time() - run_gone_since >= IN_RUN_ABSENT_GRACE)
+                    )
+                    if scan_due:
                         stage = detect_stage(device_screen, exclude=relic_exclude)
                         last_detected_time = time.time()
+                        # A full scan that still matches nothing is the tell
+                        # that the bot has lost the game, rather than that
+                        # the current group simply has nothing on screen yet.
+                        recovery_scan_failed = stage is None
+                    if run_alive:
+                        # Positive proof the run is still going, however long it
+                        # has lasted -- so an empty scan means nothing here, and
+                        # nothing escalates.
+                        recovery_scan_failed = False
                 else:
                     last_detected_time = time.time()
+                    run_gone_since = None
 
             if stage is not None:
                 last_known_stage_time = time.time()
+                recovery_scan_failed = False
                 runtime_config.set_stage(f"Stage: {stage}")
+            elif detection_group == "IN_GAME" and not recovery_scan_failed:
+                # A run in progress has no screen to match: between GAME_START
+                # and GAME_COMPLETE every template belongs to a screen that is
+                # not up yet, so matching nothing is what a healthy run looks
+                # like -- and it lasts minutes, which is exactly when reporting
+                # "no stage recognized" reads as a fault. Only the run-alive
+                # probe and the unfiltered recovery scan both coming up empty
+                # say the game is gone.
+                runtime_config.set_stage("In a run — playing...")
             elif time.time() - last_known_stage_time >= UNKNOWN_STAGE_REPORT_DELAY:
                 # Nothing has matched for a while: the game was closed or
                 # crashed, or it is on a screen there is no template for.
                 runtime_config.set_stage("No stage recognized — still looking...")
+
+            if recovery_scan_failed and run_alive is False and not resync_pending:
+                # No run on screen and no stage anywhere on it either: the game
+                # crashed or was closed mid-run. This is the only escalation out
+                # of IN_GAME, and it needs the probe to have actually answered
+                # "no run" -- an unanswered probe (no template installed) leaves
+                # run_alive None and never reaches here, so a setup without the
+                # PNG can still never restart a run that is merely long.
+                print("🛑 No run on screen and no stage matches — rechecking the stage...")
+                resync_pending = True
+                resync_started_time = time.time()
+                recovery_scan_failed = False
+                run_gone_since = None
+                last_stage = None
+                runtime_config.update(in_game=False)
+                runtime_config.set_stage("Checking the current stage...")
+                time.sleep(0.25)
+                continue
 
             if stage == last_stage:
                 time.sleep(0.1)

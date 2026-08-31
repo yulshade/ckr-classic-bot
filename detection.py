@@ -14,6 +14,8 @@ from config import (
     ANTI_BOT_CARD_POS_5,
     ANTI_BOT_CARD_POS_6,
     BOOST_TEMPLATES,
+    IN_RUN_REGION,
+    IN_RUN_TEMPLATE,
     MATCH_THRESHOLD,
     STAGE_REGIONS,
     STAGE_TEMPLATES,
@@ -49,6 +51,8 @@ def load_templates():
     for template_files in BOOST_TEMPLATES:
         for filename in template_files:
             _get_template_gray(filename)
+    for filename in IN_RUN_TEMPLATE:
+        _get_template_gray(filename)
 
 
 def _normalize(img):
@@ -128,6 +132,42 @@ def detect_stage(screen, stage_names=None, exclude=None):
             if max_val >= MATCH_THRESHOLD:
                 return stage_name
     return None
+
+
+def run_probe_ready():
+    """Whether the run-alive probe has a usable template to answer with."""
+    return any(_get_template_gray(filename) is not None for filename in IN_RUN_TEMPLATE)
+
+
+def detect_run_alive(screen):
+    """
+    Whether a run is on screen right now: True, False, or None for "can't tell".
+
+    None means the probe has nothing to match with -- no IN_RUN_TEMPLATE file on
+    disk, or one too large for its region -- so callers must treat it as unknown
+    rather than as "no run": a run that is actually in progress also matches no
+    stage, and mistaking one for the other restarts the game mid-run.
+    """
+    screen_gray = _normalize_gray(screen)
+    if screen_gray is None:
+        return None
+    search_area = _crop_region(screen_gray, IN_RUN_REGION)
+    matched_any_template = False
+    for filename in IN_RUN_TEMPLATE:
+        template = _get_template_gray(filename)
+        if template is None:
+            continue
+        if (
+            search_area.shape[0] < template.shape[0]
+            or search_area.shape[1] < template.shape[1]
+        ):
+            continue
+        matched_any_template = True
+        result = cv2.matchTemplate(search_area, template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
+        if max_val >= MATCH_THRESHOLD:
+            return True
+    return False if matched_any_template else None
 
 
 def detect_anti_bot_odd_cards(screen):
