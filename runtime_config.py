@@ -18,6 +18,7 @@ from config import AUTO_JUMP_INTERVAL, BOOST_CHOICES, DEVICE_IP, DEVICE_PORT
 _lock = threading.Lock()
 
 _DEFAULTS = {
+    "running": False,
     "device_ip": DEVICE_IP,
     "device_port": DEVICE_PORT,
     "use_fast_start": False,
@@ -33,10 +34,12 @@ _DEFAULTS = {
     "auto_jump_max_interval": AUTO_JUMP_INTERVAL[1],
 }
 
-# Fields not persisted to disk: internal state (mirrors bot.py's detection_group,
-# not user-editable via the UI form) and desired_boost_template (derived from
-# desired_boost_name via config.BOOST_CHOICES on load, since it isn't JSON-safe).
-_NON_PERSISTED_FIELDS = {"in_game", "desired_boost_template"}
+# Fields not persisted to disk: internal state (in_game mirrors bot.py's
+# detection_group, not user-editable via the UI form), the start/pause flag
+# (the app always launches paused, waiting for Start in the web UI) and
+# desired_boost_template (derived from desired_boost_name via
+# config.BOOST_CHOICES on load, since it isn't JSON-safe).
+_NON_PERSISTED_FIELDS = {"running", "in_game", "desired_boost_template"}
 
 _base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 PERSIST_PATH = os.path.join(_base_dir, "runtime_config.json")
@@ -65,6 +68,8 @@ def _load_persisted():
 
 _state = _load_persisted()
 _state["in_game"] = False
+# Always start paused, regardless of anything left in the persisted file.
+_state["running"] = False
 
 
 def _save_persisted():

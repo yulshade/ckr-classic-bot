@@ -380,13 +380,14 @@ def run_auto_jump():
     """Background loop: tap the fixed Jump button while a run is in progress.
 
     Meant to be started once as a daemon thread. Idles (no taps) whenever the
-    "Auto Jump" option is off or the bot isn't currently in a run, checking
+    bot is paused, the "Auto Jump" option is off, or the bot isn't currently
+    in a run, checking
     runtime_config each cycle so both can change live without a restart.
     """
     print("🦘 Auto Jump watcher started.")
     while True:
         options = runtime_config.get()
-        if options["enable_auto_jump"] and options["in_game"]:
+        if options["running"] and options["enable_auto_jump"] and options["in_game"]:
             safe_device_tap(*get_device(), JUMP_BUTTON[0], JUMP_BUTTON[1])
             time.sleep(random.uniform(options["auto_jump_min_interval"], options["auto_jump_max_interval"]))
         else:

@@ -27,6 +27,15 @@ PAGE = """
   select, input[type=text], input[type=number] { padding: 4px; }
   button { padding: 8px 20px; font-size: 1em; }
   .saved { color: #1a7f37; font-weight: bold; }
+  .status {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; margin-bottom: 1.2em; border-radius: 6px; border: 1px solid;
+  }
+  .status .state { font-weight: bold; }
+  .status.running { background: #e7f6ec; border-color: #1a7f37; color: #14532d; }
+  .status.paused { background: #fdf3e3; border-color: #b06d00; color: #7a4a00; }
+  .status form { margin: 0 0 0 auto; }
+  .status button { padding: 6px 18px; }
   .dual-slider { position: relative; height: 24px; margin: 0.6em 0 0.2em 1.6em; }
   .dual-slider .track {
     position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
@@ -55,6 +64,14 @@ PAGE = """
 </head>
 <body>
 <h1>CookieRunBot Config</h1>
+<div class="status {{ 'running' if cfg.running else 'paused' }}">
+  <span>Bot is <span class="state">{{ 'running' if cfg.running else 'paused' }}</span></span>
+  <form method="post" action="/control">
+    <button type="submit" name="action" value="{{ 'pause' if cfg.running else 'start' }}">
+      {{ 'Pause' if cfg.running else 'Start' }}
+    </button>
+  </form>
+</div>
 <p>Changes apply on the bot's next loop tick &mdash; no restart needed.</p>
 {% if saved %}<p class="saved">Saved.</p>{% endif %}
 <form method="post" action="/update">
@@ -187,6 +204,13 @@ def update():
         device_port=device_port,
     )
     return _render(saved=True)
+
+
+@app.route("/control", methods=["POST"])
+def control():
+    """Start/pause the bot loop. The bot always launches paused."""
+    runtime_config.update(running=request.form.get("action") == "start")
+    return _render()
 
 
 def start(host, port):

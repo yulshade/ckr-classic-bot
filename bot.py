@@ -39,6 +39,7 @@ from config import (
     DETECTION_ALWAYS_STAGES,
     DETECTION_GROUPS,
     DETECTION_RECOVERY_SCAN_INTERVAL,
+    RESUME_STAGE_CHECK_TIMEOUT,
     SESSION_RESET_INTERVAL,
     WEBUI_HOST,
     WEBUI_PORT,
@@ -66,6 +67,17 @@ def get_detection_stage_names(group_name, exclude=None):
     if exclude:
         stage_names = [s for s in stage_names if s not in exclude]
     return stage_names
+
+
+# Reverse of DETECTION_GROUPS: which group a detected stage puts the bot in.
+# Used to re-establish the state machine after a pause (first group wins, so
+# MAINMENU — listed in both PRE_GAME and POST_GAME — maps to PRE_GAME).
+STAGE_DETECTION_GROUP = {}
+for _group_name in ("PRE_GAME", "IN_GAME", "POST_GAME"):
+    for _stage_name in DETECTION_GROUPS[_group_name]:
+        STAGE_DETECTION_GROUP.setdefault(_stage_name, _group_name)
+for _stage_name in DETECTION_ALWAYS_STAGES:
+    STAGE_DETECTION_GROUP.setdefault(_stage_name, "PRE_GAME")
 
 
 # -------------------
@@ -99,10 +111,38 @@ def main():
         last_lives_time = time.time()
         lives_interval = random.uniform(25 * 60, 35 * 60)
         pending_send_friend_life = False
+        paused_since = None
+        has_run = False
+        resync_pending = False
+        resync_started_time = None
 
         while True:
             options = runtime_config.get()
-            runtime_config.update(in_game=(detection_group == "IN_GAME"))
+            if not options["running"]:
+                if paused_since is None:
+                    paused_since = time.time()
+                    runtime_config.update(in_game=False)
+                    last_stage = None
+                    print("⏸️ Paused — press Start in the config UI to "
+                          + ("resume." if has_run else "begin."))
+                time.sleep(0.25)
+                continue
+            if paused_since is not None:
+                paused_for = time.time() - paused_since
+                paused_since = None
+                # Don't let time spent paused count toward the background timers.
+                session_start_time += paused_for
+                last_lives_time += paused_for
+                last_detected_time += paused_for
+                print(f"⏩ Resumed after {paused_for:.0f}s paused." if has_run else "⏩ Started.")
+                has_run = True
+                # The screen may have moved on while paused, so nothing acts
+                # (auto jump included) until a fresh scan says where we are.
+                resync_pending = True
+                resync_started_time = time.time()
+                last_stage = None
+                print("🔍 Checking the current stage before resuming actions...")
+            runtime_config.update(in_game=(not resync_pending and detection_group == "IN_GAME"))
             if (options["device_ip"], options["device_port"]) != (device_ip, device_port):
                 device_ip, device_port = options["device_ip"], options["device_port"]
                 print(f"📱 Device target changed — reconnecting to {device_ip}:{device_port}...")
@@ -110,13 +150,43 @@ def main():
             relic_exclude = None if options["detect_relic"] else {"RELIC_COMPLETE", "RELIC_CLAIM"}
 
             device_screen = device_capture_screen(device_ip, device_port)
-            stage = detect_stage(device_screen, get_detection_stage_names(detection_group, exclude=relic_exclude))
-            if stage is None:
-                if time.time() - last_detected_time >= DETECTION_RECOVERY_SCAN_INTERVAL[detection_group]:
-                    stage = detect_stage(device_screen, exclude=relic_exclude)
-                    last_detected_time = time.time()
-            else:
+            if resync_pending:
+                # Full unfiltered scan — the pre-pause detection group can't be
+                # trusted. Keep idling (no actions, no auto jump) until a stage
+                # is recognized, e.g. resuming mid-run waits for GAME_COMPLETE.
+                stage = detect_stage(device_screen, exclude=relic_exclude)
+                if stage is None:
+                    resync_elapsed = time.time() - resync_started_time
+                    if resync_elapsed >= RESUME_STAGE_CHECK_TIMEOUT:
+                        # Unknown screen for too long — restart the app to get
+                        # back to a known one, then check the stage again.
+                        print(f"❓ No stage recognized {resync_elapsed:.0f}s after resuming — restarting app...")
+                        device_reset_app(device_ip, device_port)
+                        time.sleep(5)
+                        close_announcement_dialog()
+                        session_start_time = time.time()
+                        session_reset_interval = random.uniform(*SESSION_RESET_INTERVAL)
+                        last_lives_time = time.time()
+                        lives_interval = random.uniform(25 * 60, 35 * 60)
+                        detection_group = "PRE_GAME"
+                        is_first_game = True
+                        resync_started_time = time.time()
+                        print("🔍 Checking the current stage after the restart...")
+                    time.sleep(0.25)
+                    continue
+                detection_group = STAGE_DETECTION_GROUP.get(stage, "PRE_GAME")
+                print(f"✅ Stage check: {stage} — resuming in detection group {detection_group}.")
+                resync_pending = False
+                resync_started_time = None
                 last_detected_time = time.time()
+            else:
+                stage = detect_stage(device_screen, get_detection_stage_names(detection_group, exclude=relic_exclude))
+                if stage is None:
+                    if time.time() - last_detected_time >= DETECTION_RECOVERY_SCAN_INTERVAL[detection_group]:
+                        stage = detect_stage(device_screen, exclude=relic_exclude)
+                        last_detected_time = time.time()
+                else:
+                    last_detected_time = time.time()
 
             if stage == last_stage:
                 time.sleep(0.1)

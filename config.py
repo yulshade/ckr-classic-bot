@@ -247,6 +247,10 @@ DETECTION_RECOVERY_SCAN_INTERVAL = {
     "POST_GAME": 30.0,  # seconds
 }
 
+# How long the post-resume stage check may fail to recognize any stage before
+# the bot gives up and restarts the app to get back to a known screen.
+RESUME_STAGE_CHECK_TIMEOUT = 90.0  # seconds
+
 # -------------------
 # ITEM COORDINATES
 # -------------------
