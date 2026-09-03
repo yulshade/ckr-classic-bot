@@ -406,6 +406,12 @@ def main():
                 detection_group = "IN_GAME"
             elif stage == "GAME_COMPLETE":
                 print("✅ Detected Stage: GAME_COMPLETE")
+                if detection_group == "IN_GAME":
+                    # Only the first sighting of the results screen is a run
+                    # that finished: complete_finish's tap can miss, and the
+                    # POST_GAME recovery scan would then find the same screen
+                    # again — a re-detection, not a second run.
+                    print(f"🏁 Runs completed this session: {runtime_config.note_run_complete()}")
                 complete_finish()
                 detection_group = "POST_GAME"
             elif stage == "MYSTERY_BOX":

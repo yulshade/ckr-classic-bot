@@ -7,6 +7,8 @@ The status box at the top polls /status once a second, so what the bot is
 actually doing right now (the stage it last detected, or that it is looking
 for one, restarting the game, or unable to reach the device) stays correct
 without reloading the page -- and goes red if this page cannot reach the bot.
+It also carries the session tally: runs finished since the first Start, and
+the time spent running (paused time excluded, since nothing is tapped then).
 """
 import logging
 import socket
@@ -95,7 +97,7 @@ PAGE = """
   .status.running { background: #e7f6ec; border-color: #1a7f37; color: #14532d; }
   .status.paused { background: #fdf3e3; border-color: #b06d00; color: #7a4a00; }
   .status.offline { background: #fbeaea; border-color: #b00020; color: #7a0016; }
-  .status.offline form, .status.offline .target { display: none; }
+  .status.offline form, .status.offline .target, .status.offline .tally { display: none; }
   /* Which device Start is about to drive, answered where you are already looking. */
   .status .target { opacity: .75; }
   /* A crash puts the exception text in the stage line; let a long Windows path
@@ -254,6 +256,10 @@ PAGE = """
   <div id="status-live" role="status">
     <div class="state-line">Bot is <span class="state" id="status-state">{{ 'running' if cfg.running else 'paused' }}</span></div>
     <div class="readout"><span id="status-stage">{{ cfg.stage }}</span><span id="status-elapsed" aria-hidden="true"></span></div>
+    {# Finished runs are worth announcing when the number changes; the running
+       time beside them reticks every second, so it is hidden from the live
+       region for the same reason the stage's elapsed counter is. #}
+    <div class="tally readout"><span id="status-runs">{{ runs_completed }} run{{ '' if runs_completed == 1 else 's' }} completed</span><span id="status-runtime" aria-hidden="true"> · {{ run_time }} running</span></div>
     <div class="target readout">Device {{ cfg.device_ip }}:{{ cfg.device_port }}</div>
   </div>
   <form method="post" action="/control">
@@ -372,11 +378,22 @@ PAGE = """
     if (s < 60) { return ' (' + s + 's)'; }
     return ' (' + Math.floor(s / 60) + 'm ' + (s % 60) + 's)';
   }
+  function describeDuration(seconds) {
+    var s = Math.floor(seconds);
+    if (s < 60) { return s + 's'; }
+    var m = Math.floor(s / 60);
+    if (m < 60) { return m + 'm ' + (s % 60) + 's'; }
+    return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+  }
   function applyStatus(status) {
     document.getElementById('status').className = 'status ' + (status.running ? 'running' : 'paused');
     document.getElementById('status-state').textContent = status.running ? 'running' : 'paused';
     document.getElementById('status-stage').textContent = status.stage;
     document.getElementById('status-elapsed').textContent = describeElapsed(status.stage_seconds);
+    document.getElementById('status-runs').textContent =
+      status.runs_completed + (status.runs_completed === 1 ? ' run completed' : ' runs completed');
+    document.getElementById('status-runtime').textContent =
+      ' · ' + describeDuration(status.active_seconds) + ' running';
     var button = document.getElementById('control-button');
     button.value = status.running ? 'pause' : 'start';
     button.textContent = status.running ? 'Pause' : 'Start';
@@ -404,10 +421,25 @@ PAGE = """
 """
 
 
+def _describe_duration(seconds):
+    """Running time in the same words the page's JS uses, for the first paint."""
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {seconds}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m"
+
+
 def _render(saved=False):
+    runs_completed, active_seconds = runtime_config.session_totals()
     return render_template_string(
         PAGE,
         cfg=runtime_config.get(),
+        runs_completed=runs_completed,
+        run_time=_describe_duration(active_seconds),
         boost_choices=BOOST_CHOICES,
         item_mode_choices=ITEM_MODE_CHOICES,
         item_mode_off=ITEM_MODE_OFF,
@@ -479,10 +511,13 @@ def update():
 def status():
     """Live bot state for the status box, polled by the page every second."""
     cfg = runtime_config.get()
+    runs_completed, active_seconds = runtime_config.session_totals()
     return {
         "running": cfg["running"],
         "stage": cfg["stage"],
         "stage_seconds": max(0.0, time.time() - cfg["stage_since"]),
+        "runs_completed": runs_completed,
+        "active_seconds": active_seconds,
     }
 
 

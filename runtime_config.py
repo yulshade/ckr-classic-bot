@@ -45,11 +45,15 @@ _DEFAULTS = {
 
 # Fields not persisted to disk: internal state (in_game mirrors bot.py's
 # detection_group and stage/stage_since describe what the loop is doing right
-# now, none of them user-editable via the UI form), the start/pause flag
-# (the app always launches paused, waiting for Start in the web UI) and
-# desired_boost_template (derived from desired_boost_name via
+# now, none of them user-editable via the UI form), the session tally
+# (runs_completed/active_seconds/running_since count this app run only), the
+# start/pause flag (the app always launches paused, waiting for Start in the
+# web UI) and desired_boost_template (derived from desired_boost_name via
 # config.BOOST_CHOICES on load, since it isn't JSON-safe).
-_NON_PERSISTED_FIELDS = {"running", "in_game", "stage", "stage_since", "desired_boost_template"}
+_NON_PERSISTED_FIELDS = {
+    "running", "in_game", "stage", "stage_since", "desired_boost_template",
+    "runs_completed", "active_seconds", "running_since",
+}
 
 _base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 PERSIST_PATH = os.path.join(_base_dir, "runtime_config.json")
@@ -108,6 +112,15 @@ _state["running"] = False
 # opened before the loop's first tick, so seed the same words it would.
 _state["stage"] = "Nothing tapped yet"
 _state["stage_since"] = time.time()
+# What the UI reports about this app run: runs finished since the first Start,
+# and the time spent running. Time spent paused is not counted -- the bot taps
+# nothing then, and the rest of the loop's timers already skip it the same way.
+# active_seconds banks the stretches that have ended; running_since holds the
+# start of the one still open, so a running total stays live without the loop
+# writing a counter on every tick.
+_state["runs_completed"] = 0
+_state["active_seconds"] = 0.0
+_state["running_since"] = None
 
 
 def _save_persisted():
@@ -146,6 +159,42 @@ def set_stage(stage):
             _state["stage_since"] = time.time()
 
 
+def note_run_complete():
+    """Count one finished run and return the session total.
+
+    Called by bot.py when a run's results screen is first detected, which is
+    the only moment the bot knows a run reached the end.
+    """
+    with _lock:
+        _state["runs_completed"] += 1
+        return _state["runs_completed"]
+
+
+def session_totals():
+    """(runs completed, seconds spent running) since the first Start."""
+    with _lock:
+        seconds = _state["active_seconds"]
+        if _state["running_since"] is not None:
+            seconds += time.time() - _state["running_since"]
+        return _state["runs_completed"], seconds
+
+
+def _mark_running(value):
+    """Open or close the current running stretch. Caller must hold _lock.
+
+    running_since is the record of whether one is open, so repeating the state
+    the bot is already in (Start pressed twice, a stop path that also sets
+    running=False) neither restarts the clock nor banks the same seconds twice.
+    """
+    if bool(value) == (_state["running_since"] is not None):
+        return
+    if value:
+        _state["running_since"] = time.time()
+    else:
+        _state["active_seconds"] += time.time() - _state["running_since"]
+        _state["running_since"] = None
+
+
 def update(**kwargs):
     """Merge the given fields into the shared state.
 
@@ -155,5 +204,7 @@ def update(**kwargs):
     """
     with _lock:
         _state.update(kwargs)
+        if "running" in kwargs:
+            _mark_running(kwargs["running"])
         if any(k not in _NON_PERSISTED_FIELDS for k in kwargs):
             _save_persisted()
