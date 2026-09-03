@@ -49,7 +49,13 @@ from config import (
     WEBUI_HOST,
     WEBUI_PORT,
 )
-from detection import detect_run_alive, detect_stage, load_templates, run_probe_ready
+from detection import (
+    detect_run_alive,
+    detect_stage,
+    load_templates,
+    run_probe_ready,
+    unmatchable_stages,
+)
 from debug import save_debug_screen
 
 
@@ -97,6 +103,9 @@ def main():
         print(f"📱 Connecting to device at {device_ip}:{device_port}...")
         device_connect(device_ip, device_port)
         load_templates()
+        for stage_name, filename, (tw, th), (rw, rh) in unmatchable_stages():
+            print(f"⚠️ {stage_name} can never be detected: {filename} is {tw}x{th} "
+                  f"but its region in config.py is only {rw}x{rh} — widen the region.")
         if not run_probe_ready():
             print("🏃 No run-alive template in templates/ (see IN_RUN_TEMPLATE in config.py) "
                   "— mid-run the bot can't tell a long run from a closed game, so it will keep "

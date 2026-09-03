@@ -43,6 +43,31 @@ def _get_template_gray(filename):
     return _template_gray_cache[filename]
 
 
+def unmatchable_stages():
+    """
+    Stages whose template can never fit inside their region, so they never match.
+
+    detect_stage skips a template larger than its search area in silence, which
+    makes the stage look like a detection miss rather than a config error -- and
+    a region only a few pixels too small fails exactly as completely as one that
+    is wildly wrong. Reported at startup so the mismatch is visible.
+    """
+    problems = []
+    for stage_name, template_files in STAGE_TEMPLATES.items():
+        region = STAGE_REGIONS.get(stage_name)
+        if region is None:
+            continue
+        region_w, region_h = region[2] - region[0], region[3] - region[1]
+        for filename in template_files:
+            template = _get_template_gray(filename)
+            if template is None:
+                continue
+            th, tw = template.shape[:2]
+            if tw > region_w or th > region_h:
+                problems.append((stage_name, filename, (tw, th), (region_w, region_h)))
+    return problems
+
+
 def load_templates():
     """Pre-warm the template cache with all stage and boost templates at startup."""
     for template_files in STAGE_TEMPLATES.values():

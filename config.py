@@ -37,6 +37,11 @@ STAGE_DAILY_TREASURE_TEMPLATE = ["DAILY_TREASURE_1.png"]
 STAGE_DAILY_NEW_TEMPLATE = ["DAILY_NEW_1.png"]
 STAGE_ENTER_LEAGUE_TEMPLATE = ["ENTER_LEAGUE_1.png"]
 STAGE_LEAGUE_RESULTS_TEMPLATE = ["LEAGUE_RESULTS_1.png"]
+# The captcha banner's verb changes between appearances ("Find the jumping
+# card!", "Find the sliding card!", ...), so the template is only the part of
+# the banner that doesn't: the ghost and the word "Surprise!". The full banner
+# scored 0.78 against a "sliding" screen -- under MATCH_THRESHOLD -- while this
+# crop scores 0.97 across both wordings.
 STAGE_ANTI_BOT_TEMPLATE = ["ANTI_BOT_1.png"]
 STAGE_CONNECTION_LOST_TEMPLATE = ["CONNECTION_LOST_1.png", "CONNECTION_LOST_2.png"]
 STAGE_INACTIVE_TEMPLATE = ["INACTIVE_1.png"]
@@ -66,7 +71,12 @@ STAGE_DAILY_TREASURE_REGION = (452, 117, 824, 161)
 STAGE_DAILY_NEW_REGION = (432, 12, 849, 78)
 STAGE_ENTER_LEAGUE_REGION = (318, 235, 962, 384)
 STAGE_LEAGUE_RESULTS_REGION = (512, 52, 779, 105)
-STAGE_ANTI_BOT_REGION = (309, 10, 968, 111)
+# The banner sits at (322, 28) on a 1280x720 screen. The previous region ended
+# at x=968, which left room for a 649px-wide template to start no further right
+# than x=319 -- 3px short, so it could never align and the stage was unmatchable
+# whatever the wording. Keep the slack generous: a region that cannot fit its
+# template is skipped in silence (see detection.detect_stage).
+STAGE_ANTI_BOT_REGION = (300, 14, 610, 120)
 STAGE_CONNECTION_LOST_REGION = (351, 203, 936, 405)
 STAGE_INACTIVE_REGION = (358, 247, 934, 372)
 STAGE_PREVIOUS_RANK_RESULTS_REGION = (454, 42, 832, 115)
