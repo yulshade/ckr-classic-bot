@@ -21,7 +21,12 @@ WEBUI_PORT = 5000
 # -------------------
 # STAGE DETECTION TEMPLATES
 # -------------------
-STAGE_MAINMENU_TEMPLATE = ["MAINMENU_1.png"]
+# The main menu keeps whichever leaderboard tab was last open, and the anchor
+# template is the Friends tab, which is drawn cream when it is the selected
+# tab and dark brown when League or Cookies is -- inverted enough that one
+# template scores near zero on the other state. Both states are here, since
+# a menu left on League would otherwise never be recognized at all.
+STAGE_MAINMENU_TEMPLATE = ["MAINMENU_1.png", "MAINMENU_2.png"]
 STAGE_PURCHASE_ITEM_TEMPLATE = ["PURCHASE_ITEM_1.png"]
 STAGE_GAME_START_TEMPLATE = ["GAME_START_1.png"]
 STAGE_GAME_RELAY_TEMPLATE = ["GAME_RELAY_1.png"]
