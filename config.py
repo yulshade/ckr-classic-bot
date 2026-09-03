@@ -85,7 +85,11 @@ STAGE_ANTI_BOT_REGION = (300, 14, 610, 120)
 STAGE_CONNECTION_LOST_REGION = (351, 203, 936, 405)
 STAGE_INACTIVE_REGION = (358, 247, 934, 372)
 STAGE_PREVIOUS_RANK_RESULTS_REGION = (454, 42, 832, 115)
-STAGE_TOO_MANY_TREASURES_REGION = (353, 154, 931, 476)
+# Was (353, 154, 931, 476) -- 578x322 around a 580x326 template, 2px narrow
+# and 4px short, so this stage could never match. Same center, grown to 20px
+# of slack on every side: too tight fails silently and completely, while too
+# generous only costs a slightly larger search area.
+STAGE_TOO_MANY_TREASURES_REGION = (332, 132, 952, 498)
 STAGE_OVERTAKE_BREAK_SCORE_REGION = (479, 64, 799, 132)
 STAGE_PARTY_RUN_REGION = (359, 44, 922, 138)
 STAGE_GAME_SETTINGS_REGION = (484, 62, 769, 122)
