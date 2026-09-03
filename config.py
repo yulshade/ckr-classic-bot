@@ -370,7 +370,10 @@ ACCEPT_DAILY_NEW_BUTTON = (1128, 74)
 ACCEPT_ENTER_LEAGUE_BUTTON = (640, 460)
 ACCEPT_LEAGUE_RESULTS_BUTTON = (640, 610)
 ACCEPT_PREVIOUS_RANK_RESULTS_BUTTON = (640, 615)
-ACCEPT_TOO_MANY_TREASURES_BUTTON = (640, 545)
+# The dialog's close X, not its Confirm button: Confirm opens the treasure
+# cabinet, a screen with no template and no handler, where the bot sat until
+# the resume timeout restarted the game. The X dismisses it to the main menu.
+ACCEPT_TOO_MANY_TREASURES_BUTTON = (968, 140)
 ACCEPT_OVERTAKE_BREAK_SCORE_BUTTON = (465, 640)
 RELIC_COMPLETE_BUTTON = (530, 110)
 RELIC_CLAIM_BUTTON = (640, 580)
